@@ -1,0 +1,65 @@
+name: Course CI
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # Required for the vcpkg binary cache used by setup-dependencies
+  packages: write
+
+jobs:
+  build:
+    name: Build and test (Linux)
+
+    runs-on: ubuntu-24.04
+
+    env:
+      ARTIFACT_NAME: Linux-Qt6
+      BUILD_PLATFORM: official
+      BUILD_TYPE: Debug
+      CMAKE_PRESET: linux
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Setup dependencies
+        uses: ./.github/actions/setup-dependencies
+        with:
+          build-type: ${{ env.BUILD_TYPE }}
+          artifact-name: Linux
+          qt-version: 6.11.2
+
+      - name: Configure project
+        run: |
+          cmake --preset "$CMAKE_PRESET" -D VCPKG_HOST_TRIPLET="$VCPKG_TRIPLET" -D VCPKG_TARGET_TRIPLET="$VCPKG_TRIPLET"
+
+      - name: Run build
+        run: |
+          cmake --build --preset "$CMAKE_PRESET" --config "$BUILD_TYPE"
+
+      - name: Run tests
+        run: |
+          ctest --preset "$CMAKE_PRESET" --build-config "$BUILD_TYPE"
+
+      - name: Install
+        run: |
+          cmake --install build --config "$BUILD_TYPE" --prefix install
+
+      - name: Upload install artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: prismlauncher-linux-debug
+          path: install
+          if-no-files-found: error
