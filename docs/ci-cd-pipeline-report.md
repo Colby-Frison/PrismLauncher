@@ -81,3 +81,102 @@ The build is the composition root and the native-to-Java boundary from the archi
 ### What was generated and what was corrected
 
 The workflow structure above is what the assistant generated from the architecture docs and the existing CMake presets. The correction from the group was to disable the upstream workflows and keep a single course-owned file as the pipeline that runs. The verification run passed without a further change to the workflow.
+
+## Documented steps in detail
+
+### Step 1: Review the system
+
+We started from the Module 1 architecture in `docs/architecture.md` and `docs/architecture-diagrams.md`, and from the assignment in `docs/CI-CD pipeline.md`.
+
+What the system is:
+
+- `launcher/main.cpp` constructs `Application`, the composition root that owns settings, networking, metadata, instances, accounts, and the updater.
+- A Minecraft launch leaves that process. `LauncherPartLaunch` starts Java and runs `org.prismlauncher.EntryPoint` from `libraries/launcher`.
+- The same CMake project builds both parts. `CMakeLists.txt` adds `libraries/launcher` and `libraries/javacheck`.
+- `tests/CMakeLists.txt` already has headless CTest coverage for filesystem helpers, tasks, versions, libraries, pack metadata, and resource parsing.
+
+What the pipeline needs to do:
+
+- Build the C++ application and the Java helper.
+- Run those existing tests.
+- Publish something downloadable. There is no server, so the deploy step is a GitHub Actions artifact of the CMake install tree.
+
+What the workflow has to account for:
+
+- The `linux` preset in `CMakePresets.json` needs Qt 6, Ninja, extra-cmake-modules, and the vcpkg submodule.
+- Windows and macOS presets, plus GPG, Apple, and Azure signing, depend on secrets this fork does not have.
+- The unit tests do not open `MainWindow`, run OAuth, or call mod-platform APIs.
+
+We also inspected the eleven workflows already in `.github/workflows/`. They build, scan, package, publish, and release. Reusing them would not be a pipeline this group built, and the package steps would fail without signing secrets.
+
+### Step 2: Ask AI to plan the pipeline
+
+Prompt:
+
+> Review `docs/CI-CD pipeline.md`. These are the instructions for an assignment. Go through the assignment requirements and create a plan to complete it.
+
+What the assistant generated:
+
+- A plan for one `ubuntu-24.04` job in `.github/workflows/course-ci.yml`.
+- Steps: checkout with submodules, call the existing `.github/actions/setup-dependencies` action, `cmake --preset linux`, `cmake --build`, `ctest`, `cmake --install`, and `actions/upload-artifact`.
+- Qt `6.11.2`, Debug, and the `linux` preset, matching the upstream build file.
+- A report file, `docs/ci-cd-pipeline-report.md`, for the prompts, decisions, and test log.
+- A recommendation to leave the upstream workflows in place.
+
+Decision at this step: do not leave the upstream workflows running. That led to the next prompt.
+
+### Step 3: Ask AI to replace the upstream workflows
+
+Prompt:
+
+> We need to make our own CI/CD workflow, so disable the current flows they have and create our own.
+
+What the assistant generated:
+
+- An updated plan that still adds `course-ci.yml`, and that disables every existing workflow by renaming `*.yml` to `*.yml.disabled`.
+- The reason for a rename: GitHub Actions only loads `.yml` and `.yaml` from `.github/workflows`, so a renamed file never triggers, and the original text stays in the repo for this write-up.
+- The list of files to disable: `build.yml`, `release.yml`, `publish.yml`, `clang-tidy.yml`, `codeql.yml`, `nix.yml`, `container.yml`, `update-flake.yml`, `backport.yml`, `blocked-prs.yml`, and `merge-blocking-pr.yml`.
+- A decision to keep `.github/actions/` unchanged so the new workflow can still call `setup-dependencies`.
+
+Group decisions locked in here:
+
+- One course-owned workflow is the only file that runs.
+- Linux Debug only. No Windows or macOS matrix.
+- Reuse `setup-dependencies` with `artifact-name: Linux` and Qt `6.11.2`. Do not copy that setup into a new script.
+- Permissions are `contents: read` and `packages: write` for the vcpkg cache. No signing token.
+- Deploy is an unsigned install artifact named `prismlauncher-linux-debug`.
+- Triggers are pull requests, pushes to `develop`, and `workflow_dispatch`. A newer push cancels the run already in progress for that ref.
+
+### Step 4: Ask AI to implement the plan
+
+Prompt:
+
+> Implement the plan as specified.
+
+What the assistant generated, in order:
+
+1. Renamed the eleven workflow files with `git mv`, so Git showed them as renames rather than delete-and-add.
+2. Added `.github/workflows/course-ci.yml` with the job described above. Install uses `cmake --install build --config Debug --prefix install`. Upload uses `actions/upload-artifact@v7`, the same major version the repository already used, and fails the job if `install/` is empty.
+3. Wrote the first version of this report, with the architecture review, the prompts, the decisions, and a test log that still had to be filled in after a real run.
+4. Committed those files as `38215ce42` (`Replace upstream GitHub workflows with a course CI pipeline.`) and pushed `develop` to `https://github.com/Colby-Frison/PrismLauncher.git`.
+
+Unrelated local files were left unstaged: the deleted `docs/test.md` and the untracked assignment sheet `docs/CI-CD pipeline.md`.
+
+### Step 5: Test the pipeline
+
+Testing process:
+
+1. Pushing `38215ce42` to `develop` was the test. The `push` trigger started Course CI automatically. Run: [Course CI #36435815684](https://github.com/Colby-Frison/PrismLauncher/actions/runs/36435815684).
+2. `gh` was not installed on the machine used to watch the run. The run was polled with the public GitHub Actions API (`/repos/Colby-Frison/PrismLauncher/actions/runs/36435815684` and its `/jobs` endpoint) instead.
+3. Watched steps, in order: Set up job, Checkout, Setup dependencies, Configure project, Run build, Run tests, Install, Upload install artifact.
+4. Setup dependencies and configure finished first. The Debug build was still running after those, so the job was polled until it completed.
+5. Final job conclusion: success. Every step above completed successfully. The uploaded artifact is `prismlauncher-linux-debug`, 135,474,701 bytes.
+6. Listed workflow runs for commit `38215ce42`. Course CI was the only run. None of the renamed `*.yml.disabled` files started.
+
+Problems encountered and how they were handled:
+
+- The GitHub CLI was missing locally, so the run could not be watched with `gh run watch`. The REST API returned the same status, step list, and artifact size, and that was enough to confirm the result. The workflow file was not changed for this.
+- The upstream Nix workflow had already succeeded on the previous commit, `ed53999de`, before the disable landed. That run is not part of this pipeline. The commit that contains the rename did not start Nix, Build, CodeQL, or any other upstream workflow.
+- Configure, compile, CTest, install, and upload did not fail. There was no pipeline change to make after the run.
+
+After the run, the test log table in this report was filled in with the step results and the run URL, then pushed as `757ccc383`. That second push is a documentation update. It starts another Course CI run because every push to `develop` triggers the workflow. The workflow file itself was not changed between the two commits.
