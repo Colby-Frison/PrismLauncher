@@ -44,9 +44,21 @@ The assistant read the architecture docs and the existing `.github/workflows/bui
 
 ## Test log
 
-The workflow is set up to run on GitHub-hosted Ubuntu. The completion check is a successful configure, a successful Debug build, a passing `ctest --preset linux` run, and an uploaded `prismlauncher-linux-debug` artifact.
+The workflow runs on GitHub-hosted Ubuntu. The completion check is a successful configure, a successful Debug build, a passing `ctest --preset linux` run, and an uploaded `prismlauncher-linux-debug` artifact.
 
-Results from the verification run are recorded below after the workflow finishes.
+Verification run: [Course CI #36435815684](https://github.com/Colby-Frison/PrismLauncher/actions/runs/36435815684), commit `38215ce42`, conclusion success.
+
+| Step | Result |
+| --- | --- |
+| Checkout | success |
+| Setup dependencies | success |
+| Configure project | success |
+| Run build | success |
+| Run tests | success |
+| Install | success |
+| Upload install artifact | success (`prismlauncher-linux-debug`, about 135 MB) |
+
+That push was the only workflow triggered for the commit. The renamed upstream files did not start. No compile, test, or upload failures occurred, so the workflow file was not changed after this run.
 
 ## Explanation notes
 
@@ -68,4 +80,4 @@ The build is the composition root and the native-to-Java boundary from the archi
 
 ### What was generated and what was corrected
 
-The workflow structure above is what the assistant generated from the architecture docs and the existing CMake presets. The correction from the group was to disable the upstream workflows and keep a single course-owned file as the pipeline that runs. Further corrections from the verification run are listed in the test log.
+The workflow structure above is what the assistant generated from the architecture docs and the existing CMake presets. The correction from the group was to disable the upstream workflows and keep a single course-owned file as the pipeline that runs. The verification run passed without a further change to the workflow.
