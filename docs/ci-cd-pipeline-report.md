@@ -180,3 +180,12 @@ Problems encountered and how they were handled:
 - Configure, compile, CTest, install, and upload did not fail. There was no pipeline change to make after the run.
 
 After the run, the test log table in this report was filled in with the step results and the run URL, then pushed as `757ccc383`. That second push is a documentation update. It starts another Course CI run because every push to `develop` triggers the workflow. The workflow file itself was not changed between the two commits.
+
+## Summary of steps
+
+1. We reviewed the Module 1 architecture and decided the pipeline must build the Qt/C++ launcher and its Java helper, run the existing headless CTest suite, and upload an install tree because there is no server to deploy to.
+2. We asked the assistant to plan a course pipeline from the assignment. It proposed one Ubuntu Debug job that checks out submodules, sets up Qt and vcpkg, configures and builds the `linux` preset, runs CTest, and uploads an unsigned artifact.
+3. We asked the assistant to disable the upstream workflows and use only our own. It renamed the eleven existing workflow files to `*.yml.disabled` and kept the shared setup action so the new job could still install dependencies.
+4. We asked the assistant to implement that plan. It added `.github/workflows/course-ci.yml`, wrote the first version of this report, and pushed the change as commit `38215ce42`.
+5. Pushing that commit started [Course CI #36435815684](https://github.com/Colby-Frison/PrismLauncher/actions/runs/36435815684). Checkout, dependency setup, configure, build, tests, install, and artifact upload all succeeded, and no disabled upstream workflow ran.
+6. The only local snag was a missing `gh` command, so the run was watched through the GitHub API instead. The workflow itself did not fail, so it was not changed after the run, and this report was updated with the results.
