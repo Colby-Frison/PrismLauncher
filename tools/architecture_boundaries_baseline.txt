@@ -1,0 +1,19 @@
+# Existing cross-layer includes. Remove a line when the include is fixed.
+# A new include that breaks the layer rules must be removed, not added here.
+launcher/minecraft/launch/EnsureAvailableMemory.cpp: ui/dialogs/CustomMessageBox.h
+launcher/minecraft/mod/ModFolderModel.cpp: ui/dialogs/CustomMessageBox.h
+launcher/minecraft/mod/ResourceFolderModel.cpp: ui/dialogs/CustomMessageBox.h
+launcher/minecraft/mod/tasks/GetModDependenciesTask.cpp: ui/pages/modplatform/ModModel.h
+launcher/minecraft/mod/tasks/GetModDependenciesTask.h: ui/pages/modplatform/ModModel.h
+launcher/modplatform/atlauncher/ATLPackInstallTask.cpp: ui/dialogs/BlockedModsDialog.h
+launcher/modplatform/flame/FlameInstanceCreationTask.cpp: ui/dialogs/BlockedModsDialog.h
+launcher/modplatform/flame/FlameInstanceCreationTask.cpp: ui/dialogs/CustomMessageBox.h
+launcher/modplatform/flame/FlameInstanceCreationTask.cpp: ui/dialogs/UntrustedModsDialog.h
+launcher/modplatform/flame/FlameInstanceCreationTask.cpp: ui/pages/modplatform/OptionalModDialog.h
+launcher/modplatform/flame/FlameInstanceCreationTask.h: ui/dialogs/BlockedModsDialog.h
+launcher/modplatform/ftb/FTBPackInstallTask.cpp: ui/dialogs/BlockedModsDialog.h
+launcher/modplatform/ftb/FTBPackInstallTask.h: ui/dialogs/BlockedModsDialog.h
+launcher/modplatform/modrinth/ModrinthInstanceCreationTask.cpp: ui/dialogs/CustomMessageBox.h
+launcher/modplatform/modrinth/ModrinthInstanceCreationTask.cpp: ui/dialogs/UntrustedModsDialog.h
+launcher/modplatform/modrinth/ModrinthInstanceCreationTask.cpp: ui/pages/modplatform/OptionalModDialog.h
+launcher/net/NetJob.cpp: ui/dialogs/NetworkJobFailedDialog.h

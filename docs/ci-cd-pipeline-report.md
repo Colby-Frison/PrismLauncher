@@ -189,3 +189,21 @@ After the run, the test log table in this report was filled in with the step res
 4. We asked the assistant to implement that plan. It added `.github/workflows/course-ci.yml`, wrote the first version of this report, and pushed the change as commit `38215ce42`.
 5. Pushing that commit started [Course CI #36435815684](https://github.com/Colby-Frison/PrismLauncher/actions/runs/36435815684). Checkout, dependency setup, configure, build, tests, install, and artifact upload all succeeded, and no disabled upstream workflow ran.
 6. The only local snag was a missing `gh` command, so the run was watched through the GitHub API instead. The workflow itself did not fail, so it was not changed after the run, and this report was updated with the results.
+
+## M2-S5 evaluation and improvement
+
+### Checklist problem
+
+The first Course CI run already built, tested, installed, and uploaded an artifact. It did not scan the repository, and it did not check the module boundaries in the target architecture diagram. Those boundaries are tasks and networking (`launcher/tasks`, `launcher/net`), the instance and account domain (`launcher/minecraft`, including `launcher/minecraft/auth`), provider adapters (`launcher/modplatform`), and UI (`launcher/ui`). UI may depend on the other layers. The other layers may not include UI. Tasks and networking also may not include the instance domain or provider adapters.
+
+Splitting `Launcher_logic` into four CMake targets was rejected. The architecture notes say that extraction waits until service interfaces exist, and a hard ban on the current UI includes would fail the build immediately.
+
+### What was generated and what was reviewed
+
+The assistant generated `tools/check_architecture_boundaries.py`, the fixture tests in `tests/architecture/test_boundaries.py`, the `architecture-boundaries` job, and the completed checklist in `docs/requirement_Checklist.md`. The group review kept the existing Linux build job, added no marketplace actions, and recorded the 17 includes that already cross a layer in `tools/architecture_boundaries_baseline.txt`. New includes that break the rules fail the job. A baseline line that no longer matches the tree also fails, so a fixed include has to be removed from the baseline in the same change.
+
+The checker tests do not link Qt. They cover an illegal adapter include, a legal UI include, and a stale baseline entry. Those three tests passed locally before the workflow change was pushed.
+
+### Verification run
+
+The run URL for this improvement is filled in after the push that adds the boundary job.

@@ -17,6 +17,24 @@ permissions:
   packages: write
 
 jobs:
+  architecture-boundaries:
+    name: Architecture boundaries
+
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Check architecture boundaries
+        run: python3 tools/check_architecture_boundaries.py
+
+      - name: Test the boundary checker
+        run: python3 -m unittest discover -s tests/architecture -v
+
   build:
     name: Build and test (Linux)
 
