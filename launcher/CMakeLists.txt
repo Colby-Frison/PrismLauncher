@@ -411,6 +411,22 @@ set(SETTINGS_SOURCES
     settings/SettingsObject.h
 )
 
+set(SERVICE_SOURCES
+    # Narrow service contracts (R1.1) and wrappers over existing objects
+    services/LauncherSettings.h
+    services/SettingsObjectLauncherSettings.h
+    services/SettingsObjectLauncherSettings.cpp
+    services/NetworkContext.h
+    services/SharedNetworkContext.h
+    services/SharedNetworkContext.cpp
+    services/InstanceCatalog.h
+    services/InstanceListCatalog.h
+    services/InstanceListCatalog.cpp
+    services/AccountService.h
+    services/AccountListService.h
+    services/AccountListService.cpp
+)
+
 set(JAVA_SOURCES
     java/JavaChecker.h
     java/JavaChecker.cpp
@@ -752,6 +768,7 @@ set(LOGIC_SOURCES
     ${SCREENSHOTS_SOURCES}
     ${TASKS_SOURCES}
     ${SETTINGS_SOURCES}
+    ${SERVICE_SOURCES}
     ${JAVA_SOURCES}
     ${TRANSLATIONS_SOURCES}
     ${TOOLS_SOURCES}
