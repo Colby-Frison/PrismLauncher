@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Fail when a new cross-layer include appears under launcher/.
+"""Fail when launcher/ includes violate the target architecture boundaries.
 
-The target architecture separates tasks and networking, the instance and
-account domain, provider adapters, and UI. Existing violations are listed in
-the baseline. The check fails if the tree gains a violation or a baseline
-entry no longer exists.
+The proposed architecture separates tasks and networking, the instance and
+account domain, provider adapters, and UI. This check enforces those rules
+strictly: any forbidden include fails until the tree complies. There is no
+greylist of known debt.
 """
 
 from __future__ import annotations
@@ -94,66 +94,24 @@ def find_violations(root: Path) -> set[str]:
     return violations
 
 
-def read_baseline(path: Path) -> set[str]:
-    if not path.is_file():
-        raise FileNotFoundError(path)
-    entries: set[str] = set()
-    for line in path.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        entries.add(stripped)
-    return entries
-
-
-def compare(current: set[str], baseline: set[str]) -> tuple[list[str], list[str]]:
-    new_violations = sorted(current - baseline)
-    stale_entries = sorted(baseline - current)
-    return new_violations, stale_entries
-
-
-def write_baseline(path: Path, violations: set[str]) -> None:
-    lines = [
-        "# Existing cross-layer includes. Remove a line when the include is fixed.",
-        "# A new include that breaks the layer rules must be removed, not added here.",
-        *sorted(violations),
-        "",
-    ]
-    path.write_text("\n".join(lines), encoding="utf-8", newline="\n")
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
-    parser.add_argument(
-        "--baseline",
-        type=Path,
-        default=Path(__file__).resolve().parent / "architecture_boundaries_baseline.txt",
-    )
-    parser.add_argument("--write-baseline", action="store_true")
     args = parser.parse_args(argv)
 
     root = args.root.resolve()
-    current = find_violations(root)
-    if args.write_baseline:
-        write_baseline(args.baseline, current)
-        print(f"Wrote {len(current)} baseline entries to {args.baseline}")
+    violations = sorted(find_violations(root))
+    if not violations:
+        print("Architecture boundaries hold: no forbidden cross-layer includes.")
         return 0
 
-    baseline = read_baseline(args.baseline)
-    new_violations, stale_entries = compare(current, baseline)
-    if not new_violations and not stale_entries:
-        print(f"Architecture boundaries match the baseline ({len(current)} known includes).")
-        return 0
-
-    if new_violations:
-        print("New cross-layer includes:", file=sys.stderr)
-        for entry in new_violations:
-            print(f"  {entry}", file=sys.stderr)
-    if stale_entries:
-        print("Baseline entries that are no longer present:", file=sys.stderr)
-        for entry in stale_entries:
-            print(f"  {entry}", file=sys.stderr)
+    print(
+        f"Architecture boundaries violated ({len(violations)} include(s)). "
+        "The proposed design forbids these dependencies:",
+        file=sys.stderr,
+    )
+    for entry in violations:
+        print(f"  {entry}", file=sys.stderr)
     return 1
 
 

@@ -22,11 +22,16 @@ The workflow also has to account for constraints in the architecture and the bui
 
 ## AI step
 
+Cursor chat request ID: `4f6b5956-9dca-44e6-815c-4871c8c5143a`
+
 ### Prompts
 
-1. Review `docs/CI-CD pipeline.md`, go through the assignment requirements, and create a plan to complete it.
-2. Make our own CI/CD workflow, disable the current flows, and create our own.
-3. Implement that plan: disable the upstream workflows, add the course pipeline, write this report, and run the workflow until the build, tests, and artifact upload succeed.
+1. `@CI-CD pipeline.md These are the instructions for an assignment, pelase go thorugh the assingmetn requiremnst and create a plan to complete it`
+2. `We need to make our own CI/Cd workflow, so disable the current flows they have and create our own`
+3. Implement the course CI/CD pipeline plan: disable the upstream workflows, add the course pipeline, write this report, and run the workflow until the build, tests, and artifact upload succeed.
+4. `For the artifact to be submitted we need to have "The documented steps in details.", can you add that to the bottom of the report`
+5. `Great, can you also create a summarized section at the bottom with a series of steps and each step is roughly 1-2 sentences`
+6. (M2-S5) `We now need to create test and adjust the workflow(s) so it adheres to our new architecture @architecture-diagrams.md...` with `M2-S5_instructions.md` and `docs/requirement_Checklist.md`
 
 ### What the assistant generated
 
@@ -200,10 +205,11 @@ Splitting `Launcher_logic` into four CMake targets was rejected. The architectur
 
 ### What was generated and what was reviewed
 
-The assistant generated `tools/check_architecture_boundaries.py`, the fixture tests in `tests/architecture/test_boundaries.py`, the `architecture-boundaries` job, and the completed checklist in `docs/requirement_Checklist.md`. The group review kept the existing Linux build job, added no marketplace actions, and recorded the 17 includes that already cross a layer in `tools/architecture_boundaries_baseline.txt`. New includes that break the rules fail the job. A baseline line that no longer matches the tree also fails, so a fixed include has to be removed from the baseline in the same change.
+The assistant generated `tools/check_architecture_boundaries.py`, the fixture tests in `tests/architecture/test_boundaries.py`, the `architecture-boundaries` job, and the completed checklist in `docs/requirement_Checklist.md`. An early version greylisted the 17 existing UI-from-domain includes in a baseline file so the job stayed green. The group later rejected that approach: the pipeline should enforce the proposed architecture, so a red gate on current debt is the correct signal.
 
-The checker tests do not link Qt. They cover an illegal adapter include, a legal UI include, and a stale baseline entry. Those three tests passed locally before the workflow change was pushed.
+The baseline file and its flags were removed. The checker now fails on any forbidden include. The unit tests cover an illegal adapter include, a legal UI include, and a clean tree. They do not link Qt. A local run against the real repository exits nonzero and lists the 17 violations.
 
-### Verification run
+### Verification runs
 
-The run URL for this improvement is filled in after the push that adds the boundary job.
+- Greylist version: [Course CI #36731231555](https://github.com/Colby-Frison/PrismLauncher/actions/runs/36731231555), commit `565770b81`, conclusion success. Both jobs passed while known debt was allowed.
+- Strict version: filled in after the push that removes the baseline. Expected result: `architecture-boundaries` fails with the violation list, the Linux build may still succeed, and the workflow conclusion is `failure`.

@@ -18,36 +18,31 @@ def write_source(root: Path, relative: str, include: str) -> None:
 
 
 class ArchitectureBoundaryTests(unittest.TestCase):
-    def test_illegal_include_fails_against_an_empty_baseline(self) -> None:
+    def test_illegal_include_is_reported(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             write_source(root, "launcher/modplatform/adapter.h", "ui/dialogs/BlockedModsDialog.h")
             violations = checker.find_violations(root)
-            new_violations, stale = checker.compare(violations, set())
             self.assertEqual(
-                new_violations,
-                ['launcher/modplatform/adapter.h: ui/dialogs/BlockedModsDialog.h'],
+                violations,
+                {"launcher/modplatform/adapter.h: ui/dialogs/BlockedModsDialog.h"},
             )
-            self.assertEqual(stale, [])
 
     def test_ui_may_include_other_layers(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             write_source(root, "launcher/ui/window.cpp", "minecraft/MinecraftInstance.h")
             violations = checker.find_violations(root)
-            new_violations, stale = checker.compare(violations, set())
-            self.assertEqual(new_violations, [])
-            self.assertEqual(stale, [])
+            self.assertEqual(violations, set())
 
-    def test_stale_baseline_entry_fails(self) -> None:
+    def test_clean_tree_has_no_violations(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             write_source(root, "launcher/net/job.cpp", "net/NetJob.h")
+            write_source(root, "launcher/tasks/work.cpp", "tasks/Task.h")
+            write_source(root, "launcher/minecraft/instance.cpp", "minecraft/BaseInstance.h")
             violations = checker.find_violations(root)
-            baseline = {"launcher/net/job.cpp: minecraft/MinecraftInstance.h"}
-            new_violations, stale = checker.compare(violations, baseline)
-            self.assertEqual(new_violations, [])
-            self.assertEqual(stale, ["launcher/net/job.cpp: minecraft/MinecraftInstance.h"])
+            self.assertEqual(violations, set())
 
 
 if __name__ == "__main__":
