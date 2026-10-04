@@ -29,11 +29,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Check architecture boundaries
-        run: python3 tools/check_architecture_boundaries.py
-
       - name: Test the boundary checker
         run: python3 -m unittest discover -s tests/architecture -v
+
+      - name: Check architecture boundaries
+        run: python3 tools/check_architecture_boundaries.py
 
   build:
     name: Build and test (Linux)

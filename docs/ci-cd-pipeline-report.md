@@ -22,7 +22,10 @@ The workflow also has to account for constraints in the architecture and the bui
 
 ## AI step
 
-Cursor chat request ID: `4f6b5956-9dca-44e6-815c-4871c8c5143a`
+Cursor chat request IDs:
+
+- Pipeline build: `4f6b5956-9dca-44e6-815c-4871c8c5143a`
+- Strict / fail-until-compliant redesign: `1980c066-560e-44f2-a7ef-50cbf98c9248`
 
 ### Prompts
 
@@ -32,6 +35,9 @@ Cursor chat request ID: `4f6b5956-9dca-44e6-815c-4871c8c5143a`
 4. `For the artifact to be submitted we need to have "The documented steps in details.", can you add that to the bottom of the report`
 5. `Great, can you also create a summarized section at the bottom with a series of steps and each step is roughly 1-2 sentences`
 6. (M2-S5) `We now need to create test and adjust the workflow(s) so it adheres to our new architecture @architecture-diagrams.md...` with `M2-S5_instructions.md` and `docs/requirement_Checklist.md`
+7. (Strict redesign) `The workflow still passed, is that intended, or has something gone wrong`
+8. (Strict redesign) `I think the intention is that we create the Ci/CD pipeline to reflect the needs of our new proposed architecture. So the workflow rusn should fail, as the curretn architecture and boundaries do not meet our poposed design`
+9. (Strict redesign) Plan then implement strict architecture-boundary CI (remove greylist; fail on any forbidden include).
 
 ### What the assistant generated
 
@@ -201,7 +207,7 @@ After the run, the test log table in this report was filled in with the step res
 
 The first Course CI run already built, tested, installed, and uploaded an artifact. It did not scan the repository, and it did not check the module boundaries in the target architecture diagram. Those boundaries are tasks and networking (`launcher/tasks`, `launcher/net`), the instance and account domain (`launcher/minecraft`, including `launcher/minecraft/auth`), provider adapters (`launcher/modplatform`), and UI (`launcher/ui`). UI may depend on the other layers. The other layers may not include UI. Tasks and networking also may not include the instance domain or provider adapters.
 
-Splitting `Launcher_logic` into four CMake targets was rejected. The architecture notes say that extraction waits until service interfaces exist, and a hard ban on the current UI includes would fail the build immediately.
+Splitting `Launcher_logic` into four CMake targets was rejected. The architecture notes say that extraction waits until service interfaces exist. A hard ban on the current UI includes in the **architecture job** is intentional: that job should stay red until development removes the forbidden dependencies (TDD-style). The Linux build job still runs in parallel.
 
 ### What was generated and what was reviewed
 
@@ -212,4 +218,4 @@ The baseline file and its flags were removed. The checker now fails on any forbi
 ### Verification runs
 
 - Greylist version: [Course CI #36731231555](https://github.com/Colby-Frison/PrismLauncher/actions/runs/36731231555), commit `565770b81`, conclusion success. Both jobs passed while known debt was allowed.
-- Strict version: filled in after the push that removes the baseline. Expected result: `architecture-boundaries` fails with the violation list, the Linux build may still succeed, and the workflow conclusion is `failure`.
+- Strict version: [Course CI #37239138792](https://github.com/Colby-Frison/PrismLauncher/actions/runs/37239138792), commit `16cb9cdc4`, conclusion `failure`. Architecture boundaries failed on the 17 forbidden includes. Build and test (Linux) still succeeded (configure, build, CTest, install, artifact upload).
