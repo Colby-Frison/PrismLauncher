@@ -1,4 +1,4 @@
-# Service interfaces: ownership and injection (R1.1)
+# Service interfaces: ownership and injection (R1.1 / R1.2)
 
 This note covers the narrow service contracts introduced for R1 and the rules for owning and injecting them. Call-site migration is intentionally deferred to later R1 sub-issues.
 
@@ -13,18 +13,31 @@ This note covers the narrow service contracts introduced for R1 and the rules fo
 
 Headers live under `launcher/services/`.
 
-## Ownership
+## Ownership and lifetime (R1.2)
 
-- `Application` remains the composition root. It continues to own the concrete `SettingsObject`, `QNetworkAccessManager`, `HttpMetaCache`, `InstanceList`, and `AccountList` instances.
-- Wrappers hold non-owning pointers to those objects. They must not outlive the backing objects.
-- Wrappers do not introduce a second service locator. Do not replace `APPLICATION` with another global that returns these interfaces.
+`Application` is the composition root. At startup it constructs and owns:
 
-Recommended lifetime (R1.2):
+1. The concrete backing objects: `SettingsObject` (global + playtime), `QNetworkAccessManager`, `HttpMetaCache`, `InstanceList`, and `AccountList` (unchanged).
+2. The four wrappers as `std::unique_ptr` members, created in `Application`'s constructor after those backing objects exist:
+   - `SettingsObjectLauncherSettings` → `m_launcherSettings`
+   - `SharedNetworkContext` → `m_networkContext`
+   - `InstanceListCatalog` → `m_instanceCatalog`
+   - `AccountListService` → `m_accountService`
 
-1. Application constructs and owns the backing objects (unchanged today).
-2. Application constructs the four wrappers and stores them as `std::unique_ptr` members.
-3. Application exposes `LauncherSettings*`, `NetworkContext*`, `InstanceCatalog*`, and `AccountService*` accessors for injection.
-4. Existing `settings()`, `network()`, `instances()`, and `accounts()` accessors stay until call sites migrate.
+Wrappers hold non-owning pointers to the backing objects. They must not outlive those objects. Member declaration order places the wrappers after the concrete members so wrappers are destroyed first on shutdown.
+
+Accessors for injection (return interface pointers):
+
+| Accessor | Returns |
+| --- | --- |
+| `launcherSettings()` | `LauncherSettings*` |
+| `networkContext()` | `NetworkContext*` |
+| `instanceCatalog()` | `InstanceCatalog*` |
+| `accountService()` | `AccountService*` |
+
+Legacy accessors `settings()`, `playtimeSettings()`, `network()`, `metacache()`, `instances()`, and `accounts()` remain for unmigrated call sites. Do not expand the `APPLICATION` macro with new responsibilities; prefer these interface accessors when migrating.
+
+Wrappers do not introduce a second service locator. Do not replace `APPLICATION` with another global that returns these interfaces.
 
 ## Injection rules
 
@@ -34,9 +47,9 @@ Recommended lifetime (R1.2):
 - Transitional methods such as `LauncherSettings::settingsObject()`, `InstanceCatalog::model()`, and `AccountService::model()` exist so Qt models and `SettingsObject` signal wiring can migrate incrementally. New non-UI logic should avoid them.
 - Tests may construct wrappers around fakes or temporary `INISettingsObject` / list instances without constructing `QApplication` as a service locator.
 
-## Out of scope for R1.1
+## Out of scope for R1.1 / R1.2
 
-- Rewriting `APPLICATION->…` call sites
+- Rewriting `APPLICATION->…` call sites (R1.3+)
 - Extracting `AuthFlow` construction into `AccountService`
 - Moving API keys / capability flags onto `NetworkContext`
 - Splitting CMake targets by layer (R7)
