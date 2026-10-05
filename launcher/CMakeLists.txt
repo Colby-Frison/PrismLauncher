@@ -482,6 +482,10 @@ set(API_SOURCES
     modplatform/ResourceAPI.h
     modplatform/ResourceAPI.cpp
 
+    modplatform/ModPlatformProvider.h
+    modplatform/ModPlatformRegistry.h
+    modplatform/ModPlatformRegistry.cpp
+
     modplatform/EnsureMetadataTask.h
     modplatform/EnsureMetadataTask.cpp
 
