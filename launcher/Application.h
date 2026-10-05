@@ -81,6 +81,11 @@ class LogModel;
 struct MinecraftTarget;
 class MinecraftAccount;
 
+class LauncherSettings;
+class NetworkContext;
+class InstanceCatalog;
+class AccountService;
+
 namespace Meta {
 class Index;
 }
@@ -120,6 +125,9 @@ class Application : public QApplication {
     SettingsObject* settings() const { return m_settings.get(); }
     SettingsObject* playtimeSettings() const { return m_playtimeSettings.get(); }
 
+    /** Narrow settings contract for injection; Application owns the wrapper. */
+    LauncherSettings* launcherSettings() const { return m_launcherSettings.get(); }
+
     qint64 timeSinceStart() const { return m_startTime.msecsTo(QDateTime::currentDateTime()); }
 
     static QIcon logo();
@@ -136,9 +144,15 @@ class Application : public QApplication {
 
     InstanceList* instances() const { return m_instances.get(); }
 
+    /** Narrow instance catalog for injection; Application owns the wrapper. */
+    InstanceCatalog* instanceCatalog() const { return m_instanceCatalog.get(); }
+
     IconList* icons() const { return m_icons.get(); }
 
     AccountList* accounts() const { return m_accounts.get(); }
+
+    /** Narrow account service for injection; Application owns the wrapper. */
+    AccountService* accountService() const { return m_accountService.get(); }
 
     Status status() const { return m_status; }
 
@@ -149,6 +163,9 @@ class Application : public QApplication {
     QNetworkAccessManager* network();
 
     HttpMetaCache* metacache();
+
+    /** Narrow network contract for injection; Application owns the wrapper. */
+    NetworkContext* networkContext() const { return m_networkContext.get(); }
 
     Meta::Index* metadataIndex();
 
@@ -264,6 +281,13 @@ class Application : public QApplication {
     std::unique_ptr<GenericPageProvider> m_globalSettingsProvider;
     QSet<QString> m_features;
     std::unique_ptr<ThemeManager> m_themeManager;
+
+    // Narrow service facades (non-owning of backing objects). Declared after the
+    // concrete members above so they are destroyed first on shutdown.
+    std::unique_ptr<LauncherSettings> m_launcherSettings;
+    std::unique_ptr<NetworkContext> m_networkContext;
+    std::unique_ptr<InstanceCatalog> m_instanceCatalog;
+    std::unique_ptr<AccountService> m_accountService;
 
     QMap<QString, std::shared_ptr<BaseProfilerFactory>> m_profilers;
 
