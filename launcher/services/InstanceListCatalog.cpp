@@ -65,9 +65,29 @@ void InstanceListCatalog::setInstanceGroup(const InstanceId& id, GroupId name)
     m_list->setInstanceGroup(id, name);
 }
 
+void InstanceListCatalog::deleteGroup(const GroupId& name)
+{
+    m_list->deleteGroup(name);
+}
+
+void InstanceListCatalog::renameGroup(const GroupId& src, const GroupId& dst)
+{
+    m_list->renameGroup(src, dst);
+}
+
 bool InstanceListCatalog::trashInstance(const InstanceId& id)
 {
     return m_list->trashInstance(id);
+}
+
+bool InstanceListCatalog::trashedSomething() const
+{
+    return m_list->trashedSomething();
+}
+
+bool InstanceListCatalog::undoTrashInstance()
+{
+    return m_list->undoTrashInstance();
 }
 
 void InstanceListCatalog::deleteInstance(const InstanceId& id)
