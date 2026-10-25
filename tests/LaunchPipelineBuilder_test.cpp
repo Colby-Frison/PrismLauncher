@@ -175,8 +175,9 @@ void LaunchPipelineBuilderTest::offlineDefaultOrder()
 
 void LaunchPipelineBuilderTest::onlineReplacesOfflineLibraries()
 {
+    // Demo still takes the online recipe. Normal would construct ClaimAccount, which looks up APPLICATION->accounts().
     bool applied = false;
-    auto task = applyStandard(session(LaunchMode::Normal), {}, {}, {}, {}, false, &applied);
+    auto task = applyStandard(session(LaunchMode::Demo), {}, {}, {}, {}, false, &applied);
     QVERIFY(applied);
 
     auto expected = offlineDefaultSteps();
