@@ -47,6 +47,25 @@ Wrappers do not introduce a second service locator. Do not replace `APPLICATION`
 - Transitional methods such as `LauncherSettings::settingsObject()`, `InstanceCatalog::model()`, and `AccountService::model()` exist so Qt models and `SettingsObject` signal wiring can migrate incrementally. New non-UI logic should avoid them.
 - Tests may construct wrappers around fakes or temporary `INISettingsObject` / list instances without constructing `QApplication` as a service locator.
 
+## MainWindow migration (R1.6)
+
+`MainWindow` receives `LauncherSettings`, `InstanceCatalog`, `AccountService`, and `NetworkContext` through its constructor; `Application::showMainWindow()` passes its own wrappers. All settings, playtime, instance, account, network, and metadata-cache access in `MainWindow.cpp` goes through those pointers. Qt model binding and `InstanceList` / `AccountList` signal connections use the transitional `model()` accessors.
+
+`InstanceCatalog` gained `deleteGroup`, `renameGroup`, `trashedSomething`, and `undoTrashInstance` so group and trash actions do not need `model()`.
+
+`APPLICATION` uses in `MainWindow.cpp` went from 109 to 31. The remaining uses are application-level UI concerns with no narrow contract yet:
+
+| Remaining use | Call sites | Owner |
+| --- | --- | --- |
+| `launch()`, `kill()` | double-click, Launch, Kill actions | R2.1 LaunchCoordinator (#15) |
+| `oauthReplyRecieved` signal | `processURLs()` OAuth callback URLs | R2.3 Account / OAuth coordinator (#17) |
+| `ShowGlobalSettings()`, `globalSettingsApplied` | Settings and Manage Accounts actions, settings-closed refresh | R2.4 thin Application/MainWindow (#18) |
+| `showInstanceWindow()`, `showLogWindow()`, `closeCurrentWindow()`, `quit()` | Edit Instance, View Log, close and quit shortcuts | R2.4 thin Application/MainWindow (#18) |
+| `updaterEnabled()`, `updatesAreAllowed()`, `updater()`, `triggerUpdateCheck()` | update menu visibility and Check for Updates | R2.4 thin Application/MainWindow (#18) |
+| `themeManager()`, `currentCatChanged` signal | theme menu, theme/cat-pack folder actions, cat background | UI layer; stays with the app target (R7.3, #35) |
+| `icons()` | instance icon toolbar, icon-updated signal, icons folder | R1 follow-up (#1): needs an icon repository contract |
+| `javaPath()` | View Java Folder action | R1 follow-up (#1): candidate for `LauncherSettings` |
+
 ## Out of scope for R1.1 / R1.2
 
 - Rewriting `APPLICATION->…` call sites (R1.3+)

@@ -1705,7 +1705,7 @@ MainWindow* Application::showMainWindow(bool minimized)
         m_mainWindow->raise();
         m_mainWindow->activateWindow();
     } else {
-        m_mainWindow = new MainWindow();
+        m_mainWindow = new MainWindow(launcherSettings(), instanceCatalog(), accountService(), networkContext());
         m_mainWindow->restoreState(QByteArray::fromBase64(APPLICATION->settings()->get("MainWindowState").toString().toUtf8()));
         m_mainWindow->restoreGeometry(QByteArray::fromBase64(APPLICATION->settings()->get("MainWindowGeometry").toString().toUtf8()));
 

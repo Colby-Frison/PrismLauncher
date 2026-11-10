@@ -62,6 +62,10 @@ class KonamiCode;
 class InstanceTask;
 class LabeledToolButton;
 class Setting;
+class LauncherSettings;
+class InstanceCatalog;
+class AccountService;
+class NetworkContext;
 
 namespace Ui {
 class MainWindow;
@@ -70,7 +74,11 @@ class MainWindow : public QMainWindow {
     Q_OBJECT
 
    public:
-    explicit MainWindow(QWidget* parent = 0);
+    MainWindow(LauncherSettings* settings,
+               InstanceCatalog* instances,
+               AccountService* accounts,
+               NetworkContext* network,
+               QWidget* parent = nullptr);
     ~MainWindow();
 
     bool eventFilter(QObject* obj, QEvent* ev) override;
@@ -235,6 +243,13 @@ class MainWindow : public QMainWindow {
 
    private:
     Ui::MainWindow* ui;
+
+    // owned by Application, which outlives this window
+    LauncherSettings* m_settings;
+    InstanceCatalog* m_instances;
+    AccountService* m_accounts;
+    NetworkContext* m_network;
+
     // these are managed by Qt's memory management model!
     InstanceView* view = nullptr;
     InstanceProxyModel* proxymodel = nullptr;

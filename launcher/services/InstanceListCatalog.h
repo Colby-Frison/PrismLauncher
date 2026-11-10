@@ -39,8 +39,12 @@ class InstanceListCatalog : public InstanceCatalog {
     QStringList getGroups() override;
     GroupId getInstanceGroup(const InstanceId& id) const override;
     void setInstanceGroup(const InstanceId& id, GroupId name) override;
+    void deleteGroup(const GroupId& name) override;
+    void renameGroup(const GroupId& src, const GroupId& dst) override;
 
     bool trashInstance(const InstanceId& id) override;
+    bool trashedSomething() const override;
+    bool undoTrashInstance() override;
     void deleteInstance(const InstanceId& id) override;
 
     Task* wrapInstanceTask(InstanceTask* task) override;

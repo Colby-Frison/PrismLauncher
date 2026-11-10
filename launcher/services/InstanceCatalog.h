@@ -48,8 +48,12 @@ class InstanceCatalog {
     virtual QStringList getGroups() = 0;
     virtual GroupId getInstanceGroup(const InstanceId& id) const = 0;
     virtual void setInstanceGroup(const InstanceId& id, GroupId name) = 0;
+    virtual void deleteGroup(const GroupId& name) = 0;
+    virtual void renameGroup(const GroupId& src, const GroupId& dst) = 0;
 
     virtual bool trashInstance(const InstanceId& id) = 0;
+    virtual bool trashedSomething() const = 0;
+    virtual bool undoTrashInstance() = 0;
     virtual void deleteInstance(const InstanceId& id) = 0;
 
     virtual Task* wrapInstanceTask(InstanceTask* task) = 0;
