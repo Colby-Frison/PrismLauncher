@@ -46,6 +46,7 @@
 #include <QProcess>
 #include <QTimer>
 
+#include "LaunchMode.h"
 #include "minecraft/auth/MinecraftAccount.h"
 
 class LaunchController;
@@ -55,6 +56,7 @@ class InstanceProxyModel;
 class LabeledToolButton;
 class QLabel;
 class MinecraftInstance;
+class BaseInstance;
 class MinecraftLauncher;
 class BaseProfilerFactory;
 class InstanceView;
@@ -68,6 +70,9 @@ class AccountService;
 class NetworkContext;
 class CreateInstanceCoordinator;
 class IInstanceTaskRunner;
+class LaunchCoordinator;
+class ILaunchExtrasStore;
+class AccountCoordinator;
 
 namespace Ui {
 class MainWindow;
@@ -80,6 +85,9 @@ class MainWindow : public QMainWindow {
                InstanceCatalog* instances,
                AccountService* accounts,
                NetworkContext* network,
+               LaunchCoordinator* launches,
+               ILaunchExtrasStore* launchExtras,
+               AccountCoordinator* accountCoordinator,
                QWidget* parent = nullptr);
     ~MainWindow();
 
@@ -242,6 +250,8 @@ class MainWindow : public QMainWindow {
 
     bool runModalTask(Task* task);
     void instanceFromInstanceTask(InstanceTask* task);
+    bool requestLaunch(MinecraftInstance* instance, LaunchMode mode = LaunchMode::Normal);
+    bool requestKill(BaseInstance* instance);
 
    private:
     Ui::MainWindow* ui;
@@ -251,6 +261,9 @@ class MainWindow : public QMainWindow {
     InstanceCatalog* m_instances;
     AccountService* m_accounts;
     NetworkContext* m_network;
+    LaunchCoordinator* m_launches = nullptr;
+    ILaunchExtrasStore* m_launchExtras = nullptr;
+    AccountCoordinator* m_accountCoordinator = nullptr;
 
     std::unique_ptr<IInstanceTaskRunner> m_instanceTaskRunner;
     std::unique_ptr<CreateInstanceCoordinator> m_createInstances;

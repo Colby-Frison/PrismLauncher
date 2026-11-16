@@ -53,18 +53,33 @@ Wrappers do not introduce a second service locator. Do not replace `APPLICATION`
 
 `InstanceCatalog` gained `deleteGroup`, `renameGroup`, `trashedSomething`, and `undoTrashInstance` so group and trash actions do not need `model()`.
 
-`APPLICATION` uses in `MainWindow.cpp` went from 109 to 31. The remaining uses are application-level UI concerns with no narrow contract yet:
+`APPLICATION` uses in `MainWindow.cpp` went from 109 to 31. After R2.4 (#18), workflow calls go through injected coordinators; remaining `APPLICATION` uses are shell/window concerns:
 
 | Remaining use | Call sites | Owner |
 | --- | --- | --- |
-| `launch()`, `kill()` | double-click, Launch, Kill actions | R2.1: `Application` delegates to `LaunchCoordinator` (#15); UI still calls `APPLICATION->launch/kill` until R2.4 (#18) |
-| `oauthReplyRecieved` signal | `processURLs()` OAuth callback URLs | R2.3 Account / OAuth coordinator (#17) |
-| `ShowGlobalSettings()`, `globalSettingsApplied` | Settings and Manage Accounts actions, settings-closed refresh | R2.4 thin Application/MainWindow (#18) |
-| `showInstanceWindow()`, `showLogWindow()`, `closeCurrentWindow()`, `quit()` | Edit Instance, View Log, close and quit shortcuts | R2.4 thin Application/MainWindow (#18) |
-| `updaterEnabled()`, `updatesAreAllowed()`, `updater()`, `triggerUpdateCheck()` | update menu visibility and Check for Updates | R2.4 thin Application/MainWindow (#18) |
+| `launchCoordinator()` / `LaunchUiHints` | Launch/Kill via injected `LaunchCoordinator*` + extras store | R2.1 + R2.4 (#15, #18) |
+| `accountCoordinator()` | OAuth URL delivery, account-menu set-default, MSAStep | R2.3 + R2.4 (#17, #18) |
+| `CreateInstanceCoordinator` (MainWindow-owned) | New/copy/import create path; ManagedPackPage updates | R2.2 + R2.4 (#16, #18) |
+| `ShowGlobalSettings()`, `globalSettingsApplied` | Settings and Manage Accounts actions, settings-closed refresh | Application shell (window orchestration) |
+| `showInstanceWindow()`, `showLogWindow()`, `closeCurrentWindow()`, `quit()` | Edit Instance, View Log, close and quit shortcuts; launch UX redirects | Application shell (window orchestration) |
+| `updaterEnabled()`, `updatesAreAllowed()`, `updater()`, `triggerUpdateCheck()` | update menu visibility and Check for Updates | Application shell |
 | `themeManager()`, `currentCatChanged` signal | theme menu, theme/cat-pack folder actions, cat background | UI layer; stays with the app target (R7.3, #35) |
 | `icons()` | instance icon toolbar, icon-updated signal, icons folder | R1 follow-up (#1): needs an icon repository contract |
 | `javaPath()` | View Java Folder action | R1 follow-up (#1): candidate for `LauncherSettings` |
+| `profilers()` | Launch request profiler lookup in MainWindow | Application composition root |
+
+## R2 ownership map (UI → coordinators → services)
+
+```text
+MainWindow / InstanceWindow / pages
+  → LaunchCoordinator (+ LaunchUiHints) → ILaunchExtrasStore / IRunningInstanceCounter
+  → CreateInstanceCoordinator → InstanceCatalog + LauncherSettings + IInstanceTaskRunner
+  → AccountCoordinator → AccountService
+Application (composition root)
+  owns coordinators and service wrappers; thin launch/kill facades for non-MainWindow callers
+MSAStep
+  listens to AccountCoordinator::oauthReplyReceived (not Application::oauthReplyRecieved)
+```
 
 ## Out of scope for R1.1 / R1.2
 

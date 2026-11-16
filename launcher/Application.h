@@ -163,6 +163,12 @@ class Application : public QApplication {
     /** Account / OAuth workflow coordinator; Application owns it. */
     AccountCoordinator* accountCoordinator() const { return m_accountCoordinator.get(); }
 
+    /** Launch workflow coordinator; Application owns it. */
+    LaunchCoordinator* launchCoordinator() const { return m_launchCoordinator.get(); }
+
+    /** Per-instance launch extras store used with LaunchCoordinator kill/launch. */
+    ILaunchExtrasStore* launchExtrasStore() const { return m_launchExtrasStore.get(); }
+
     Status status() const { return m_status; }
 
     const QMap<QString, std::shared_ptr<BaseProfilerFactory>>& profilers() const { return m_profilers; }

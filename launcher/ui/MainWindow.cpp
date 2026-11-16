@@ -42,6 +42,8 @@
 #include "Application.h"
 #include "BuildConfig.h"
 #include "FileSystem.h"
+#include "LaunchCoordinator.h"
+#include "LaunchUiHints.h"
 
 #include "MainWindow.h"
 #include "ui_MainWindow.h"
@@ -167,8 +169,19 @@ MainWindow::MainWindow(LauncherSettings* settings,
                        InstanceCatalog* instances,
                        AccountService* accounts,
                        NetworkContext* network,
+                       LaunchCoordinator* launches,
+                       ILaunchExtrasStore* launchExtras,
+                       AccountCoordinator* accountCoordinator,
                        QWidget* parent)
-    : QMainWindow(parent), ui(new Ui::MainWindow), m_settings(settings), m_instances(instances), m_accounts(accounts), m_network(network)
+    : QMainWindow(parent)
+    , ui(new Ui::MainWindow)
+    , m_settings(settings)
+    , m_instances(instances)
+    , m_accounts(accounts)
+    , m_network(network)
+    , m_launches(launches)
+    , m_launchExtras(launchExtras)
+    , m_accountCoordinator(accountCoordinator)
 {
     m_instanceTaskRunner = std::make_unique<ModalInstanceTaskRunner>([this](Task* task) { return runModalTask(task); });
     m_createInstances = std::make_unique<CreateInstanceCoordinator>(m_instances, m_settings, m_instanceTaskRunner.get());
@@ -767,7 +780,14 @@ void MainWindow::changeActiveAccount()
     if (!valid) {
         index = -1;
     }
-    m_accounts->setDefaultAccount(index == -1 ? nullptr : m_accounts->at(index));
+    if (!m_accountCoordinator) {
+        return;
+    }
+    if (index == -1) {
+        m_accountCoordinator->clearDefaultAccount();
+    } else {
+        m_accountCoordinator->setDefaultAccount(m_accounts->at(index));
+    }
     defaultAccountChanged();
 }
 
@@ -1644,21 +1664,49 @@ void MainWindow::instanceActivated(QModelIndex index)
         }
         return;
     }
-    APPLICATION->launch(inst);
+    requestLaunch(inst);
 }
 
 void MainWindow::on_actionLaunchInstance_triggered()
 {
     if (m_selectedInstance && !m_selectedInstance->isRunning()) {
-        APPLICATION->launch(m_selectedInstance);
+        requestLaunch(m_selectedInstance);
     }
 }
 
 void MainWindow::on_actionKillInstance_triggered()
 {
     if (m_selectedInstance && m_selectedInstance->isRunning()) {
-        APPLICATION->kill(m_selectedInstance);
+        requestKill(m_selectedInstance);
     }
+}
+
+bool MainWindow::requestLaunch(MinecraftInstance* instance, LaunchMode mode)
+{
+    if (!instance || !m_launches) {
+        return false;
+    }
+
+    LaunchCoordinator::LaunchRequest request;
+    request.instance = instance;
+    request.mode = mode;
+    request.parentWidget = this;
+    request.profiler = APPLICATION->profilers().value(instance->settings()->get("Profiler").toString(), nullptr).get();
+
+    const auto outcome = m_launches->requestLaunch(request);
+    if (outcome == LaunchCoordinator::LaunchOutcome::BlockedByUpdate) {
+        qDebug() << "Cannot launch instances while an update is running. Please try again when updates are completed.";
+    }
+    const auto windowHint = LaunchUiHints::instanceWindowHintFor(outcome);
+    if (windowHint.open) {
+        APPLICATION->showInstanceWindow(instance, windowHint.page);
+    }
+    return LaunchUiHints::launchAccepted(outcome);
+}
+
+bool MainWindow::requestKill(BaseInstance* instance)
+{
+    return LaunchUiHints::killInstance(m_launches, m_launchExtras, instance);
 }
 
 void MainWindow::on_actionCreateInstanceShortcut_triggered()

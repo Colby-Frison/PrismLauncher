@@ -14,15 +14,47 @@
 #include <memory>
 
 #include "Application.h"
+#include "CreateInstanceCoordinator.h"
 #include "InstanceImportTask.h"
 #include "InstanceList.h"
 #include "InstanceTask.h"
 #include "Markdown.h"
 #include "StringUtils.h"
+#include "services/InstanceCatalog.h"
+#include "services/LauncherSettings.h"
+#include "tasks/Task.h"
 
 #include "ui/InstanceWindow.h"
 #include "ui/dialogs/CustomMessageBox.h"
 #include "ui/dialogs/ProgressDialog.h"
+
+namespace {
+class ManagedPackTaskRunner final : public IInstanceTaskRunner {
+   public:
+    explicit ManagedPackTaskRunner(ManagedPackPage* page) : m_page(page) {}
+
+    bool run(Task* stagedTask) override
+    {
+        QObject::connect(stagedTask, &Task::failed, m_page, [page = m_page](const QString& reason) {
+            CustomMessageBox::selectable(page, page->tr("Error"), reason, QMessageBox::Critical)->show();
+        });
+        QObject::connect(stagedTask, &Task::succeeded, m_page, [page = m_page, stagedTask]() {
+            QStringList warnings = stagedTask->warnings();
+            if (warnings.count()) {
+                CustomMessageBox::selectable(page, page->tr("Warnings"), warnings.join('\n'), QMessageBox::Warning)->show();
+            }
+        });
+
+        ProgressDialog loadDialog(m_page);
+        loadDialog.setSkipButton(true, m_page->tr("Abort"));
+        loadDialog.execWithTask(stagedTask);
+        return stagedTask && stagedTask->wasSuccessful();
+    }
+
+   private:
+    ManagedPackPage* m_page = nullptr;
+};
+}  // namespace
 
 ManagedPackPage* ManagedPackPage::createPage(BaseInstance* inst, const QString& type, QWidget* parent)
 {
@@ -144,22 +176,11 @@ bool ManagedPackPage::runUpdateTask(InstanceTask* task)
 {
     Q_ASSERT(task);
 
-    const unique_qobject_ptr<Task> wrappedTask(APPLICATION->instances()->wrapInstanceTask(task));
-
-    connect(wrappedTask.get(), &Task::failed, this,
-            [this](const QString& reason) { CustomMessageBox::selectable(this, tr("Error"), reason, QMessageBox::Critical)->show(); });
-    connect(wrappedTask.get(), &Task::succeeded, this, [this, task]() {
-        QStringList warnings = task->warnings();
-        if (warnings.count()) {
-            CustomMessageBox::selectable(this, tr("Warnings"), warnings.join('\n'), QMessageBox::Warning)->show();
-        }
-    });
-
-    ProgressDialog loadDialog(this);
-    loadDialog.setSkipButton(true, tr("Abort"));
-    loadDialog.execWithTask(wrappedTask.get());
-
-    return wrappedTask->wasSuccessful();
+    ManagedPackTaskRunner runner(this);
+    CreateInstanceCoordinator coordinator(APPLICATION->instanceCatalog(), APPLICATION->launcherSettings(), &runner);
+    CreateInstanceCoordinator::CreateRequest request;
+    request.task = task;
+    return coordinator.createFromTask(request) == CreateInstanceCoordinator::Outcome::Succeeded;
 }
 
 void ManagedPackPage::suggestVersion()

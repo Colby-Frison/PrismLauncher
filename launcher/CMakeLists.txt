@@ -891,6 +891,8 @@ SET(LAUNCHER_SOURCES
     LaunchController.cpp
     LaunchCoordinator.h
     LaunchCoordinator.cpp
+    LaunchUiHints.h
+    LaunchUiHints.cpp
     AccountCoordinator.h
     AccountCoordinator.cpp
 

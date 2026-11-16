@@ -41,6 +41,7 @@
 #include <QOAuthHttpServerReplyHandler>
 #include <QOAuthOobReplyHandler>
 
+#include "AccountCoordinator.h"
 #include "Application.h"
 #include "BuildConfig.h"
 #include "FileSystem.h"
@@ -75,11 +76,17 @@ class CustomOAuthOobReplyHandler : public QOAuthOobReplyHandler {
    public:
     explicit CustomOAuthOobReplyHandler(QObject* parent = nullptr) : QOAuthOobReplyHandler(parent)
     {
-        connect(APPLICATION, &Application::oauthReplyRecieved, this, &QOAuthOobReplyHandler::callbackReceived);
+        auto* accounts = APPLICATION->accountCoordinator();
+        if (accounts) {
+            connect(accounts, &AccountCoordinator::oauthReplyReceived, this, &QOAuthOobReplyHandler::callbackReceived);
+        }
     }
     ~CustomOAuthOobReplyHandler() override
     {
-        disconnect(APPLICATION, &Application::oauthReplyRecieved, this, &QOAuthOobReplyHandler::callbackReceived);
+        auto* accounts = APPLICATION->accountCoordinator();
+        if (accounts) {
+            disconnect(accounts, &AccountCoordinator::oauthReplyReceived, this, &QOAuthOobReplyHandler::callbackReceived);
+        }
     }
     QString callback() const override { return BuildConfig.LAUNCHER_APP_BINARY_NAME + "://oauth/microsoft"; }
 

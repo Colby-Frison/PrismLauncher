@@ -119,6 +119,7 @@
 #include "services/SharedNetworkContext.h"
 
 #include "LaunchCoordinator.h"
+#include "LaunchUiHints.h"
 
 class ApplicationLaunchExtrasStore final : public ILaunchExtrasStore {
    public:
@@ -1637,40 +1638,20 @@ bool Application::launch(MinecraftInstance* instance,
         }
     }
 
-    switch (m_launchCoordinator->requestLaunch(request)) {
-        case LaunchCoordinator::LaunchOutcome::Started:
-            return true;
-        case LaunchCoordinator::LaunchOutcome::BlockedByUpdate:
-            qDebug() << "Cannot launch instances while an update is running. Please try again when updates are completed.";
-            return false;
-        case LaunchCoordinator::LaunchOutcome::ShowConsoleBecauseRunning:
-            showInstanceWindow(instance, "console");
-            return true;
-        case LaunchCoordinator::LaunchOutcome::ShowInstanceBecauseEditable:
-            showInstanceWindow(instance);
-            return true;
-        case LaunchCoordinator::LaunchOutcome::Rejected:
-            return false;
+    const auto outcome = m_launchCoordinator->requestLaunch(request);
+    if (outcome == LaunchCoordinator::LaunchOutcome::BlockedByUpdate) {
+        qDebug() << "Cannot launch instances while an update is running. Please try again when updates are completed.";
     }
-    return false;
+    const auto windowHint = LaunchUiHints::instanceWindowHintFor(outcome);
+    if (windowHint.open) {
+        showInstanceWindow(instance, windowHint.page);
+    }
+    return LaunchUiHints::launchAccepted(outcome);
 }
 
 bool Application::kill(BaseInstance* instance)
 {
-    if (!instance || !instance->isRunning()) {
-        if (instance) {
-            qWarning() << "Attempted to kill instance" << instance->id() << ", which isn't running.";
-        }
-        return false;
-    }
-    if (!m_launchCoordinator) {
-        return false;
-    }
-    // Preserve prior UX: running with no controller still reports success.
-    if (m_launchExtrasStore && m_launchExtrasStore->controller(instance->id())) {
-        return m_launchCoordinator->requestKill(instance);
-    }
-    return true;
+    return LaunchUiHints::killInstance(m_launchCoordinator.get(), m_launchExtrasStore.get(), instance);
 }
 
 void Application::closeCurrentWindow()
@@ -1767,7 +1748,8 @@ MainWindow* Application::showMainWindow(bool minimized)
         m_mainWindow->raise();
         m_mainWindow->activateWindow();
     } else {
-        m_mainWindow = new MainWindow(launcherSettings(), instanceCatalog(), accountService(), networkContext());
+        m_mainWindow = new MainWindow(launcherSettings(), instanceCatalog(), accountService(), networkContext(), launchCoordinator(),
+                                      launchExtrasStore(), accountCoordinator());
         m_mainWindow->restoreState(QByteArray::fromBase64(APPLICATION->settings()->get("MainWindowState").toString().toUtf8()));
         m_mainWindow->restoreGeometry(QByteArray::fromBase64(APPLICATION->settings()->get("MainWindowGeometry").toString().toUtf8()));
 
