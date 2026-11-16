@@ -66,6 +66,8 @@ class LauncherSettings;
 class InstanceCatalog;
 class AccountService;
 class NetworkContext;
+class CreateInstanceCoordinator;
+class IInstanceTaskRunner;
 
 namespace Ui {
 class MainWindow;
@@ -238,7 +240,7 @@ class MainWindow : public QMainWindow {
     void updateStatusCenter();
     void setInstanceActionsEnabled(bool enabled);
 
-    void runModalTask(Task* task);
+    bool runModalTask(Task* task);
     void instanceFromInstanceTask(InstanceTask* task);
 
    private:
@@ -249,6 +251,9 @@ class MainWindow : public QMainWindow {
     InstanceCatalog* m_instances;
     AccountService* m_accounts;
     NetworkContext* m_network;
+
+    std::unique_ptr<IInstanceTaskRunner> m_instanceTaskRunner;
+    std::unique_ptr<CreateInstanceCoordinator> m_createInstances;
 
     // these are managed by Qt's memory management model!
     InstanceView* view = nullptr;
