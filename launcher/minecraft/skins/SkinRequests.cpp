@@ -44,7 +44,7 @@ Net::Request::Ptr makeSkinDeleteRequest(const QString& token)
 
 Net::Request::Ptr makeSkinUploadRequest(const QString& token, const QString& path, const QString& variant)
 {
-    auto getPayload = [path, variant] -> std::expected<QHttpMultiPart*, QString> {
+    auto getPayload = [path, variant]() -> std::expected<QHttpMultiPart*, QString> {
         auto* file = new QFile(path);
         if (!file->open(QFile::ReadOnly)) {
             qWarning() << "Could not open file" << path << "for reading:" << file->errorString();
