@@ -891,6 +891,12 @@ SET(LAUNCHER_SOURCES
     LaunchController.cpp
     LaunchCoordinator.h
     LaunchCoordinator.cpp
+    AccountCoordinator.h
+    AccountCoordinator.cpp
+
+    # Workflow coordinators (R2)
+    CreateInstanceCoordinator.h
+    CreateInstanceCoordinator.cpp
 
     # page provider for instances
     InstancePageProvider.h

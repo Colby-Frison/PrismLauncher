@@ -112,6 +112,7 @@
 #include "icons/IconList.h"
 #include "net/HttpMetaCache.h"
 
+#include "AccountCoordinator.h"
 #include "services/AccountListService.h"
 #include "services/InstanceListCatalog.h"
 #include "services/SettingsObjectLauncherSettings.h"
@@ -1102,6 +1103,10 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         m_networkContext = std::make_unique<SharedNetworkContext>(m_network.get(), m_metacache.get(), m_settings.get());
         m_instanceCatalog = std::make_unique<InstanceListCatalog>(m_instances.get());
         m_accountService = std::make_unique<AccountListService>(m_accounts.get());
+        m_accountCoordinator = std::make_unique<AccountCoordinator>(m_accountService.get());
+        // Keep legacy Application::oauthReplyRecieved listeners working while UI
+        // delivers callbacks through the coordinator.
+        connect(m_accountCoordinator.get(), &AccountCoordinator::oauthReplyReceived, this, &Application::oauthReplyRecieved);
         m_launchExtrasStore = std::unique_ptr<ILaunchExtrasStore>(new ApplicationLaunchExtrasStore(this));
         m_runningInstanceCounter = std::unique_ptr<IRunningInstanceCounter>(new ApplicationRunningInstanceCounter(this));
         m_launchCoordinator =

@@ -38,6 +38,7 @@
  *      limitations under the License.
  */
 
+#include "AccountCoordinator.h"
 #include "Application.h"
 #include "BuildConfig.h"
 #include "FileSystem.h"
@@ -72,9 +73,11 @@
 #include <QToolButton>
 #include <QWidget>
 #include <QWidgetAction>
+#include <functional>
 #include <memory>
 
 #include <BaseInstance.h>
+#include <CreateInstanceCoordinator.h>
 #include <BuildConfig.h>
 #include <DesktopServices.h>
 #include <InstanceList.h>
@@ -92,6 +95,7 @@
 #include <services/InstanceCatalog.h>
 #include <services/LauncherSettings.h>
 #include <services/NetworkContext.h>
+
 #include <tools/BaseProfiler.h>
 #include <updater/ExternalUpdater.h>
 #include "InstanceWindow.h"
@@ -148,6 +152,15 @@ QString profileInUseFilter(const QString& profile, bool used)
         return profile;
     }
 }
+
+class ModalInstanceTaskRunner final : public IInstanceTaskRunner {
+   public:
+    explicit ModalInstanceTaskRunner(std::function<bool(Task*)> run) : m_run(std::move(run)) {}
+    bool run(Task* stagedTask) override { return m_run(stagedTask); }
+
+   private:
+    std::function<bool(Task*)> m_run;
+};
 }  // namespace
 
 MainWindow::MainWindow(LauncherSettings* settings,
@@ -157,6 +170,9 @@ MainWindow::MainWindow(LauncherSettings* settings,
                        QWidget* parent)
     : QMainWindow(parent), ui(new Ui::MainWindow), m_settings(settings), m_instances(instances), m_accounts(accounts), m_network(network)
 {
+    m_instanceTaskRunner = std::make_unique<ModalInstanceTaskRunner>([this](Task* task) { return runModalTask(task); });
+    m_createInstances = std::make_unique<CreateInstanceCoordinator>(m_instances, m_settings, m_instanceTaskRunner.get());
+
     ui->setupUi(this);
 
     setWindowIcon(Application::logo());
@@ -873,7 +889,7 @@ void MainWindow::updateCatState()
     setCatBackground(catVisible);
 }
 
-void MainWindow::runModalTask(Task* task)
+bool MainWindow::runModalTask(Task* task)
 {
     connect(task, &Task::failed, this,
             [this](QString reason) { CustomMessageBox::selectable(this, tr("Error"), reason, QMessageBox::Critical)->show(); });
@@ -886,12 +902,14 @@ void MainWindow::runModalTask(Task* task)
     ProgressDialog loadDialog(this);
     loadDialog.setSkipButton(true, tr("Abort"));
     loadDialog.execWithTask(task);
+    return task && task->wasSuccessful();
 }
 
 void MainWindow::instanceFromInstanceTask(InstanceTask* rawTask)
 {
-    unique_qobject_ptr<Task> task(m_instances->wrapInstanceTask(rawTask));
-    runModalTask(task.get());
+    CreateInstanceCoordinator::CreateRequest request;
+    request.task = rawTask;
+    m_createInstances->createFromTask(request);
 }
 
 void MainWindow::on_actionCopyInstance_triggered()
@@ -907,8 +925,7 @@ void MainWindow::on_actionCopyInstance_triggered()
     copyTask->setName(copyInstDlg.instName());
     copyTask->setGroup(copyInstDlg.instGroup());
     copyTask->setIcon(copyInstDlg.iconKey());
-    unique_qobject_ptr<Task> task(m_instances->wrapInstanceTask(copyTask));
-    runModalTask(task.get());
+    instanceFromInstanceTask(copyTask);
 }
 
 void MainWindow::addInstance(const QString& url, const QMap<QString, QString>& extra_info)
@@ -927,21 +944,23 @@ void MainWindow::addInstance(const QString& url, const QMap<QString, QString>& e
         groupName = map["group"].toString();
     } while (0);
 
-    if (groupName.isEmpty()) {
-        groupName = m_settings->get("LastUsedGroupForNewInstance").toString();
-    }
+    groupName = m_createInstances->resolveInitialGroup(groupName);
 
     NewInstanceDialog newInstDlg(groupName, url, extra_info, this);
     if (!newInstDlg.exec())
         return;
 
-    m_settings->set("LastUsedGroupForNewInstance", newInstDlg.instGroup());
-    m_settings->set("LastUsedInstDirForNewInstance", newInstDlg.instDir());
-
     InstanceTask* creationTask = newInstDlg.extractTask();
-    if (creationTask) {
-        instanceFromInstanceTask(creationTask);
+    if (!creationTask) {
+        return;
     }
+
+    CreateInstanceCoordinator::CreateRequest request;
+    request.task = creationTask;
+    request.rememberPrefs = true;
+    request.groupToRemember = newInstDlg.instGroup();
+    request.instDirToRemember = newInstDlg.instDir();
+    m_createInstances->createFromTask(request);
 }
 
 void MainWindow::on_actionAddInstance_triggered()
@@ -1036,7 +1055,7 @@ void MainWindow::processURLs(QList<QUrl> urls)
                 const auto items = query.queryItems();
                 for (auto it = items.begin(), end = items.end(); it != end; ++it)
                     receivedData.insert(it->first, it->second);
-                emit APPLICATION->oauthReplyRecieved(receivedData);
+                APPLICATION->accountCoordinator()->deliverOAuthReply(receivedData);
                 continue;
             } else if ((url.scheme() == "prismlauncher" || url.scheme() == BuildConfig.LAUNCHER_APP_BINARY_NAME) && isExternalURLImport) {
                 // PrismLauncher URL protocol modpack import
