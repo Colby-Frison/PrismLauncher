@@ -892,6 +892,10 @@ SET(LAUNCHER_SOURCES
     AccountCoordinator.h
     AccountCoordinator.cpp
 
+    # Workflow coordinators (R2)
+    CreateInstanceCoordinator.h
+    CreateInstanceCoordinator.cpp
+
     # page provider for instances
     InstancePageProvider.h
 
