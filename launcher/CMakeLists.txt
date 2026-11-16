@@ -889,6 +889,8 @@ SET(LAUNCHER_SOURCES
     LaunchMode.h
     LaunchController.h
     LaunchController.cpp
+    LaunchCoordinator.h
+    LaunchCoordinator.cpp
 
     # page provider for instances
     InstancePageProvider.h

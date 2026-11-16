@@ -57,7 +57,7 @@ Wrappers do not introduce a second service locator. Do not replace `APPLICATION`
 
 | Remaining use | Call sites | Owner |
 | --- | --- | --- |
-| `launch()`, `kill()` | double-click, Launch, Kill actions | R2.1 LaunchCoordinator (#15) |
+| `launch()`, `kill()` | double-click, Launch, Kill actions | R2.1: `Application` delegates to `LaunchCoordinator` (#15); UI still calls `APPLICATION->launch/kill` until R2.4 (#18) |
 | `oauthReplyRecieved` signal | `processURLs()` OAuth callback URLs | R2.3 Account / OAuth coordinator (#17) |
 | `ShowGlobalSettings()`, `globalSettingsApplied` | Settings and Manage Accounts actions, settings-closed refresh | R2.4 thin Application/MainWindow (#18) |
 | `showInstanceWindow()`, `showLogWindow()`, `closeCurrentWindow()`, `quit()` | Edit Instance, View Log, close and quit shortcuts | R2.4 thin Application/MainWindow (#18) |

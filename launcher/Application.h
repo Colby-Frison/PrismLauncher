@@ -52,6 +52,11 @@
 #include "minecraft/auth/MinecraftAccount.h"
 
 class LaunchController;
+class LaunchCoordinator;
+class ILaunchExtrasStore;
+class IRunningInstanceCounter;
+class ApplicationLaunchExtrasStore;
+class ApplicationRunningInstanceCounter;
 class LocalPeer;
 class InstanceWindow;
 class MainWindow;
@@ -288,6 +293,13 @@ class Application : public QApplication {
     std::unique_ptr<NetworkContext> m_networkContext;
     std::unique_ptr<InstanceCatalog> m_instanceCatalog;
     std::unique_ptr<AccountService> m_accountService;
+
+    // Launch orchestration (R2.1). Adapters access InstanceXtras; coordinator after them.
+    friend class ApplicationLaunchExtrasStore;
+    friend class ApplicationRunningInstanceCounter;
+    std::unique_ptr<ILaunchExtrasStore> m_launchExtrasStore;
+    std::unique_ptr<IRunningInstanceCounter> m_runningInstanceCounter;
+    std::unique_ptr<LaunchCoordinator> m_launchCoordinator;
 
     QMap<QString, std::shared_ptr<BaseProfilerFactory>> m_profilers;
 

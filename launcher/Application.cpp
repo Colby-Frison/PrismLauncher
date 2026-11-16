@@ -117,6 +117,53 @@
 #include "services/SettingsObjectLauncherSettings.h"
 #include "services/SharedNetworkContext.h"
 
+#include "LaunchCoordinator.h"
+
+class ApplicationLaunchExtrasStore final : public ILaunchExtrasStore {
+   public:
+    explicit ApplicationLaunchExtrasStore(Application* app) : m_app(app) {}
+
+    bool saveOpenWindow(const QString& instanceId) override
+    {
+        QMutexLocker locker(&m_app->m_instanceExtrasMutex);
+        auto& extras = m_app->m_instanceExtras[instanceId];
+        if (extras.window && !extras.window->saveAll()) {
+            return false;
+        }
+        return true;
+    }
+
+    void setController(const QString& instanceId, std::unique_ptr<LaunchController> controller) override
+    {
+        QMutexLocker locker(&m_app->m_instanceExtrasMutex);
+        QObject::connect(controller.get(), &LaunchController::finished, m_app, &Application::controllerFinished);
+        m_app->m_instanceExtras[instanceId].controller = std::move(controller);
+    }
+
+    LaunchController* controller(const QString& instanceId) const override
+    {
+        QMutexLocker locker(&m_app->m_instanceExtrasMutex);
+        auto it = m_app->m_instanceExtras.find(instanceId);
+        if (it == m_app->m_instanceExtras.end()) {
+            return nullptr;
+        }
+        return it->second.controller.get();
+    }
+
+   private:
+    Application* m_app = nullptr;
+};
+
+class ApplicationRunningInstanceCounter final : public IRunningInstanceCounter {
+   public:
+    explicit ApplicationRunningInstanceCounter(Application* app) : m_app(app) {}
+
+    void addRunningInstance() override { m_app->addRunningInstance(); }
+
+   private:
+    Application* m_app = nullptr;
+};
+
 #include "updater/ExternalUpdater.h"
 
 #include "tools/JProfiler.h"
@@ -1055,6 +1102,10 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         m_networkContext = std::make_unique<SharedNetworkContext>(m_network.get(), m_metacache.get(), m_settings.get());
         m_instanceCatalog = std::make_unique<InstanceListCatalog>(m_instances.get());
         m_accountService = std::make_unique<AccountListService>(m_accounts.get());
+        m_launchExtrasStore = std::unique_ptr<ILaunchExtrasStore>(new ApplicationLaunchExtrasStore(this));
+        m_runningInstanceCounter = std::unique_ptr<IRunningInstanceCounter>(new ApplicationRunningInstanceCounter(this));
+        m_launchCoordinator =
+            std::make_unique<LaunchCoordinator>(m_launchExtrasStore.get(), m_runningInstanceCounter.get(), m_updateRunning);
         qInfo() << "<> Service interfaces wired.";
     }
 
@@ -1559,57 +1610,60 @@ bool Application::launch(MinecraftInstance* instance,
                          MinecraftAccountPtr accountToUse,
                          const QString& offlineName)
 {
-    if (m_updateRunning) {
-        qDebug() << "Cannot launch instances while an update is running. Please try again when updates are completed.";
-    } else if (instance->canLaunch()) {
+    if (!instance || !m_launchCoordinator) {
+        return false;
+    }
+
+    LaunchCoordinator::LaunchRequest request;
+    request.instance = instance;
+    request.mode = mode;
+    request.targetToJoin = std::move(targetToJoin);
+    request.accountToUse = std::move(accountToUse);
+    request.offlineName = offlineName;
+    request.profiler = profilers().value(instance->settings()->get("Profiler").toString(), nullptr).get();
+
+    {
         QMutexLocker locker(&m_instanceExtrasMutex);
         auto& extras = m_instanceExtras[instance->id()];
-        auto* window = extras.window;
-        if (window) {
-            if (!window->saveAll()) {
-                return false;
-            }
-        }
-        auto& controller = extras.controller;
-        controller = std::make_unique<LaunchController>();
-        controller->setInstance(instance);
-        controller->setLaunchMode(mode);
-        controller->setProfiler(profilers().value(instance->settings()->get("Profiler").toString(), nullptr).get());
-        controller->setTargetToJoin(std::move(targetToJoin));
-        controller->setAccountToUse(std::move(accountToUse));
-        controller->setOfflineName(offlineName);
-        if (window) {
-            controller->setParentWidget(window);
+        if (extras.window) {
+            request.parentWidget = extras.window;
         } else if (m_mainWindow) {
-            controller->setParentWidget(m_mainWindow);
+            request.parentWidget = m_mainWindow;
         }
-        connect(controller.get(), &LaunchController::finished, this, &Application::controllerFinished);
-        addRunningInstance();
-        QMetaObject::invokeMethod(controller.get(), &Task::start, Qt::QueuedConnection);
-        return true;
-    } else if (instance->isRunning()) {
-        showInstanceWindow(instance, "console");
-        return true;
-    } else if (instance->canEdit()) {
-        showInstanceWindow(instance);
-        return true;
+    }
+
+    switch (m_launchCoordinator->requestLaunch(request)) {
+        case LaunchCoordinator::LaunchOutcome::Started:
+            return true;
+        case LaunchCoordinator::LaunchOutcome::BlockedByUpdate:
+            qDebug() << "Cannot launch instances while an update is running. Please try again when updates are completed.";
+            return false;
+        case LaunchCoordinator::LaunchOutcome::ShowConsoleBecauseRunning:
+            showInstanceWindow(instance, "console");
+            return true;
+        case LaunchCoordinator::LaunchOutcome::ShowInstanceBecauseEditable:
+            showInstanceWindow(instance);
+            return true;
+        case LaunchCoordinator::LaunchOutcome::Rejected:
+            return false;
     }
     return false;
 }
 
 bool Application::kill(BaseInstance* instance)
 {
-    if (!instance->isRunning()) {
-        qWarning() << "Attempted to kill instance" << instance->id() << ", which isn't running.";
+    if (!instance || !instance->isRunning()) {
+        if (instance) {
+            qWarning() << "Attempted to kill instance" << instance->id() << ", which isn't running.";
+        }
         return false;
     }
-    QMutexLocker locker(&m_instanceExtrasMutex);
-    auto& extras = m_instanceExtras[instance->id()];
-    // NOTE: copy of the shared pointer keeps it alive
-    auto& controller = extras.controller;
-    locker.unlock();
-    if (controller) {
-        return controller->abort();
+    if (!m_launchCoordinator) {
+        return false;
+    }
+    // Preserve prior UX: running with no controller still reports success.
+    if (m_launchExtrasStore && m_launchExtrasStore->controller(instance->id())) {
+        return m_launchCoordinator->requestKill(instance);
     }
     return true;
 }
@@ -1654,6 +1708,9 @@ bool Application::updatesAreAllowed() const
 void Application::updateIsRunning(bool running)
 {
     m_updateRunning = running;
+    if (m_launchCoordinator) {
+        m_launchCoordinator->setUpdateRunning(running);
+    }
 }
 
 void Application::controllerFinished()
