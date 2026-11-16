@@ -38,6 +38,7 @@
  *      limitations under the License.
  */
 
+#include "AccountCoordinator.h"
 #include "Application.h"
 #include "BuildConfig.h"
 #include "FileSystem.h"
@@ -1036,7 +1037,7 @@ void MainWindow::processURLs(QList<QUrl> urls)
                 const auto items = query.queryItems();
                 for (auto it = items.begin(), end = items.end(); it != end; ++it)
                     receivedData.insert(it->first, it->second);
-                emit APPLICATION->oauthReplyRecieved(receivedData);
+                APPLICATION->accountCoordinator()->deliverOAuthReply(receivedData);
                 continue;
             } else if ((url.scheme() == "prismlauncher" || url.scheme() == BuildConfig.LAUNCHER_APP_BINARY_NAME) && isExternalURLImport) {
                 // PrismLauncher URL protocol modpack import

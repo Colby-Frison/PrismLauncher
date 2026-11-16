@@ -48,6 +48,7 @@
 #include "ui/dialogs/CustomMessageBox.h"
 #include "ui/dialogs/MSALoginDialog.h"
 
+#include "AccountCoordinator.h"
 #include "Application.h"
 
 AccountListPage::AccountListPage(QWidget* parent) : QMainWindow(parent), ui(new Ui::AccountListPage)
@@ -74,8 +75,9 @@ AccountListPage::AccountListPage(QWidget* parent) : QMainWindow(parent), ui(new 
     connect(selectionModel, &QItemSelectionModel::selectionChanged, this,
             [this]([[maybe_unused]] const QItemSelection& sel, [[maybe_unused]] const QItemSelection& dsel) { updateButtonStates(); });
     connect(ui->listView, &VersionListView::customContextMenuRequested, this, &AccountListPage::ShowContextMenu);
-    connect(ui->listView, &VersionListView::activated, this,
-            [this](const QModelIndex& index) { m_accounts->setDefaultAccount(m_accounts->at(index.row())); });
+    connect(ui->listView, &VersionListView::activated, this, [this](const QModelIndex& index) {
+        APPLICATION->accountCoordinator()->setDefaultAccount(m_accounts->at(index.row()));
+    });
 
     connect(m_accounts, &AccountList::listChanged, this, &AccountListPage::listChanged);
     connect(m_accounts, &AccountList::listActivityChanged, this, &AccountListPage::listChanged);
@@ -131,15 +133,13 @@ void AccountListPage::on_actionAddMicrosoft_triggered()
 {
     auto account = MSALoginDialog::newAccount(this);
     if (account) {
-        m_accounts->addAccount(account);
-        if (m_accounts->count() == 1) {
-            m_accounts->setDefaultAccount(account);
-        }
+        APPLICATION->accountCoordinator()->addAccount(account);
     }
 }
 
 void AccountListPage::on_actionAddOffline_triggered()
 {
+    auto* coordinator = APPLICATION->accountCoordinator();
     if (!m_accounts->anyAccountIsValid()) {
         QMessageBox::warning(this, tr("Error"),
                              tr("You must add a Microsoft account that owns Minecraft before you can add an offline account."
@@ -155,9 +155,12 @@ void AccountListPage::on_actionAddOffline_triggered()
 
     if (const MinecraftAccountPtr account = MinecraftAccount::createOffline(dialog.getUsername())) {
         account->login()->start();  // The task will complete here.
-        m_accounts->addAccount(account);
-        if (m_accounts->count() == 1) {
-            m_accounts->setDefaultAccount(account);
+        const auto outcome = coordinator->addOfflineAccount(account);
+        if (outcome == AccountCoordinator::AddOutcome::RejectedMissingMicrosoftAccount) {
+            QMessageBox::warning(this, tr("Error"),
+                                 tr("You must add a Microsoft account that owns Minecraft before you can add an offline account."
+                                    "<br><br>"
+                                    "If you have lost your account you can contact Microsoft for support."));
         }
     }
 }
@@ -173,7 +176,7 @@ void AccountListPage::on_actionRemove_triggered()
     QModelIndexList selection = ui->listView->selectionModel()->selectedIndexes();
     if (selection.size() > 0) {
         QModelIndex selected = selection.first();
-        m_accounts->removeAccount(selected);
+        APPLICATION->accountCoordinator()->removeAccount(selected);
     }
 }
 
@@ -183,7 +186,7 @@ void AccountListPage::on_actionRefresh_triggered()
     if (selection.size() > 0) {
         QModelIndex selected = selection.first();
         MinecraftAccountPtr account = selected.data(AccountList::PointerRole).value<MinecraftAccountPtr>();
-        m_accounts->requestRefresh(account->internalId());
+        APPLICATION->accountCoordinator()->refreshAccount(account);
     }
 }
 
@@ -193,13 +196,13 @@ void AccountListPage::on_actionSetDefault_triggered()
     if (selection.size() > 0) {
         QModelIndex selected = selection.first();
         MinecraftAccountPtr account = selected.data(AccountList::PointerRole).value<MinecraftAccountPtr>();
-        m_accounts->setDefaultAccount(account);
+        APPLICATION->accountCoordinator()->setDefaultAccount(account);
     }
 }
 
 void AccountListPage::on_actionNoDefault_triggered()
 {
-    m_accounts->setDefaultAccount(nullptr);
+    APPLICATION->accountCoordinator()->clearDefaultAccount();
 }
 
 void AccountListPage::updateButtonStates()

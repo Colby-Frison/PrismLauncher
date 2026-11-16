@@ -3,6 +3,7 @@
 #include "ui/dialogs/MSALoginDialog.h"
 #include "ui_LoginWizardPage.h"
 
+#include "AccountCoordinator.h"
 #include "Application.h"
 
 LoginWizardPage::LoginWizardPage(QWidget* parent) : BaseWizardPage(parent), ui(new Ui::LoginWizardPage)
@@ -33,8 +34,7 @@ void LoginWizardPage::on_pushButton_clicked()
     auto account = MSALoginDialog::newAccount(nullptr);
     wizard()->show();
     if (account) {
-        APPLICATION->accounts()->addAccount(account);
-        APPLICATION->accounts()->setDefaultAccount(account);
+        APPLICATION->accountCoordinator()->addAccount(account, true);
         if (wizard()->currentId() == wizard()->pageIds().last()) {
             wizard()->accept();
         } else {

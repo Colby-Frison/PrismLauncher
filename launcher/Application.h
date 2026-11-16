@@ -85,6 +85,7 @@ class LauncherSettings;
 class NetworkContext;
 class InstanceCatalog;
 class AccountService;
+class AccountCoordinator;
 
 namespace Meta {
 class Index;
@@ -153,6 +154,9 @@ class Application : public QApplication {
 
     /** Narrow account service for injection; Application owns the wrapper. */
     AccountService* accountService() const { return m_accountService.get(); }
+
+    /** Account / OAuth workflow coordinator; Application owns it. */
+    AccountCoordinator* accountCoordinator() const { return m_accountCoordinator.get(); }
 
     Status status() const { return m_status; }
 
@@ -288,6 +292,7 @@ class Application : public QApplication {
     std::unique_ptr<NetworkContext> m_networkContext;
     std::unique_ptr<InstanceCatalog> m_instanceCatalog;
     std::unique_ptr<AccountService> m_accountService;
+    std::unique_ptr<AccountCoordinator> m_accountCoordinator;
 
     QMap<QString, std::shared_ptr<BaseProfilerFactory>> m_profilers;
 
