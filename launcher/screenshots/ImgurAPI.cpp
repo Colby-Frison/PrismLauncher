@@ -57,7 +57,7 @@ namespace ImgurAPI {
 
 std::pair<Net::Request::Ptr, QString*> makeUpload(ScreenShot::Ptr shot)
 {
-    auto getPayload = [shot] -> std::expected<QHttpMultiPart*, QString> {
+    auto getPayload = [shot]() -> std::expected<QHttpMultiPart*, QString> {
         auto* file = new QFile(shot->m_file.absoluteFilePath());
         if (!file->open(QFile::ReadOnly)) {
             qWarning() << "Could not open file" << shot->m_file.absoluteFilePath() << "for reading:" << file->errorString();
