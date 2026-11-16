@@ -57,6 +57,19 @@ bool launchAccepted(LaunchCoordinator::LaunchOutcome outcome)
     return false;
 }
 
+bool handleLaunchOutcome(LaunchCoordinator::LaunchOutcome outcome,
+                         const std::function<void(const InstanceWindowHint&)>& onShowWindow)
+{
+    if (outcome == LaunchCoordinator::LaunchOutcome::BlockedByUpdate) {
+        qDebug() << "Cannot launch instances while an update is running. Please try again when updates are completed.";
+    }
+    const auto windowHint = instanceWindowHintFor(outcome);
+    if (windowHint.open && onShowWindow) {
+        onShowWindow(windowHint);
+    }
+    return launchAccepted(outcome);
+}
+
 bool killInstance(LaunchCoordinator* coordinator, ILaunchExtrasStore* extras, BaseInstance* instance)
 {
     if (!instance || !instance->isRunning()) {

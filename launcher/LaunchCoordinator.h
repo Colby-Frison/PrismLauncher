@@ -25,6 +25,8 @@
 
 class QWidget;
 
+class AccountCoordinator;
+
 #include "BaseInstance.h"
 #include "LaunchController.h"
 #include "LaunchMode.h"
@@ -82,7 +84,10 @@ class LaunchCoordinator : public QObject {
         Rejected
     };
 
-    explicit LaunchCoordinator(ILaunchExtrasStore* extras, IRunningInstanceCounter* running, bool updateRunning);
+    explicit LaunchCoordinator(ILaunchExtrasStore* extras,
+                               IRunningInstanceCounter* running,
+                               bool updateRunning,
+                               AccountCoordinator* accounts = nullptr);
 
     LaunchOutcome requestLaunch(const LaunchRequest& request);
     bool requestKill(BaseInstance* instance);
@@ -91,5 +96,6 @@ class LaunchCoordinator : public QObject {
    private:
     ILaunchExtrasStore* m_extras = nullptr;
     IRunningInstanceCounter* m_running = nullptr;
+    AccountCoordinator* m_accounts = nullptr;
     bool m_updateRunning = false;
 };

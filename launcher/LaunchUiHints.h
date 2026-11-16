@@ -18,6 +18,8 @@
 
 #pragma once
 
+#include <functional>
+
 #include <QString>
 
 #include "LaunchCoordinator.h"
@@ -41,6 +43,14 @@ InstanceWindowHint instanceWindowHintFor(LaunchCoordinator::LaunchOutcome outcom
 
 /** True when the launch request was accepted (started or redirected to a window). */
 bool launchAccepted(LaunchCoordinator::LaunchOutcome outcome);
+
+/**
+ * Single facade-layer ownership for launch outcome handling: log update blocks,
+ * invoke onShowWindow when a window is required, return launchAccepted.
+ * Used by both Application::launch and MainWindow::requestLaunch.
+ */
+bool handleLaunchOutcome(LaunchCoordinator::LaunchOutcome outcome,
+                         const std::function<void(const InstanceWindowHint&)>& onShowWindow);
 
 /**
  * Shared kill semantics previously in Application::kill:

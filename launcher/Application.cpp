@@ -972,7 +972,9 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
             m_globalSettingsProvider->addPage<AppearancePage>();
             m_globalSettingsProvider->addPage<MinecraftPage>();
             m_globalSettingsProvider->addPage<JavaPage>();
-            m_globalSettingsProvider->addPage<AccountListPage>();
+            // AccountListPage needs AccountCoordinator/AccountService, which are
+            // wired later in this constructor; the creator runs when Settings opens.
+            m_globalSettingsProvider->addPageCreator([this]() { return new AccountListPage(accountCoordinator(), accountService()); });
             m_globalSettingsProvider->addPage<APIPage>();
             m_globalSettingsProvider->addPage<ExternalToolsPage>();
             m_globalSettingsProvider->addPage<ProxyPage>();
@@ -1110,8 +1112,8 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         connect(m_accountCoordinator.get(), &AccountCoordinator::oauthReplyReceived, this, &Application::oauthReplyRecieved);
         m_launchExtrasStore = std::unique_ptr<ILaunchExtrasStore>(new ApplicationLaunchExtrasStore(this));
         m_runningInstanceCounter = std::unique_ptr<IRunningInstanceCounter>(new ApplicationRunningInstanceCounter(this));
-        m_launchCoordinator =
-            std::make_unique<LaunchCoordinator>(m_launchExtrasStore.get(), m_runningInstanceCounter.get(), m_updateRunning);
+        m_launchCoordinator = std::make_unique<LaunchCoordinator>(m_launchExtrasStore.get(), m_runningInstanceCounter.get(),
+                                                                  m_updateRunning, m_accountCoordinator.get());
         qInfo() << "<> Service interfaces wired.";
     }
 
@@ -1364,7 +1366,7 @@ bool Application::createSetupWizard()
         }
 
         if (login) {
-            m_setupWizard->addPage(new LoginWizardPage(m_setupWizard));
+            m_setupWizard->addPage(new LoginWizardPage(accountCoordinator(), m_setupWizard));
         }
         connect(m_setupWizard, &QDialog::finished, this, &Application::setupWizardFinished);
         m_setupWizard->show();
@@ -1639,14 +1641,9 @@ bool Application::launch(MinecraftInstance* instance,
     }
 
     const auto outcome = m_launchCoordinator->requestLaunch(request);
-    if (outcome == LaunchCoordinator::LaunchOutcome::BlockedByUpdate) {
-        qDebug() << "Cannot launch instances while an update is running. Please try again when updates are completed.";
-    }
-    const auto windowHint = LaunchUiHints::instanceWindowHintFor(outcome);
-    if (windowHint.open) {
-        showInstanceWindow(instance, windowHint.page);
-    }
-    return LaunchUiHints::launchAccepted(outcome);
+    return LaunchUiHints::handleLaunchOutcome(outcome, [this, instance](const LaunchUiHints::InstanceWindowHint& hint) {
+        showInstanceWindow(instance, hint.page);
+    });
 }
 
 bool Application::kill(BaseInstance* instance)
@@ -1806,7 +1803,7 @@ InstanceWindow* Application::showInstanceWindow(MinecraftInstance* instance, con
         window->raise();
         window->activateWindow();
     } else {
-        window = new InstanceWindow(instance);
+        window = new InstanceWindow(instance, instanceCatalog(), launcherSettings());
         m_openWindows++;
         connect(window, &InstanceWindow::isClosing, this, &Application::on_windowClose);
     }

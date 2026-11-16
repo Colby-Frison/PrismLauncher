@@ -42,6 +42,11 @@ void AccountListService::removeAccount(QModelIndex index)
     m_accounts->removeAccount(index);
 }
 
+void AccountListService::removeAccountAt(int row)
+{
+    m_accounts->removeAccount(m_accounts->index(row));
+}
+
 int AccountListService::findAccountByProfileId(const QString& profileId) const
 {
     return m_accounts->findAccountByProfileId(profileId);

@@ -60,6 +60,12 @@ class AccountCoordinator : public QObject {
     void removeAccount(QModelIndex index);
 
     /**
+     * Replace an existing account after re-authentication: remove the old entry
+     * by profile id, add the new one, and restore default when the old was default.
+     */
+    AddOutcome replaceAccount(MinecraftAccountPtr oldAccount, MinecraftAccountPtr newAccount);
+
+    /**
      * Deliver an OAuth callback payload (custom URL scheme) to listeners such as
      * MSA auth steps. Replaces embedding that emit in MainWindow URL handling.
      */

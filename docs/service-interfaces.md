@@ -57,9 +57,9 @@ Wrappers do not introduce a second service locator. Do not replace `APPLICATION`
 
 | Remaining use | Call sites | Owner |
 | --- | --- | --- |
-| `launchCoordinator()` / `LaunchUiHints` | Launch/Kill via injected `LaunchCoordinator*` + extras store | R2.1 + R2.4 (#15, #18) |
-| `accountCoordinator()` | OAuth URL delivery, account-menu set-default, MSAStep | R2.3 + R2.4 (#17, #18) |
-| `CreateInstanceCoordinator` (MainWindow-owned) | New/copy/import create path; ManagedPackPage updates | R2.2 + R2.4 (#16, #18) |
+| `launchCoordinator()` / `LaunchUiHints` | Launch/Kill via injected `LaunchCoordinator*` + extras store; shared `handleLaunchOutcome` | R2.1 + R2.4 (#15, #18) |
+| `accountCoordinator()` | Injected into MainWindow / AccountListPage / LoginWizardPage; LaunchController via LaunchCoordinator; MSAStep still via `APPLICATION` (transitional) | R2.3 + R2.4 (#17, #18) |
+| `CreateInstanceCoordinator` (MainWindow-owned; ManagedPackPage uses injected catalog/settings) | New/copy/import create path; ManagedPackPage updates | R2.2 + R2.4 (#16, #18) |
 | `ShowGlobalSettings()`, `globalSettingsApplied` | Settings and Manage Accounts actions, settings-closed refresh | Application shell (window orchestration) |
 | `showInstanceWindow()`, `showLogWindow()`, `closeCurrentWindow()`, `quit()` | Edit Instance, View Log, close and quit shortcuts; launch UX redirects | Application shell (window orchestration) |
 | `updaterEnabled()`, `updatesAreAllowed()`, `updater()`, `triggerUpdateCheck()` | update menu visibility and Check for Updates | Application shell |

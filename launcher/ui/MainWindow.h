@@ -261,7 +261,7 @@ class MainWindow : public QMainWindow {
     InstanceCatalog* m_instances;
     AccountService* m_accounts;
     NetworkContext* m_network;
-    LaunchCoordinator* m_launches = nullptr;
+    LaunchCoordinator* m_launchCoordinator = nullptr;
     ILaunchExtrasStore* m_launchExtras = nullptr;
     AccountCoordinator* m_accountCoordinator = nullptr;
 

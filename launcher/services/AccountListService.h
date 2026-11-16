@@ -33,6 +33,7 @@ class AccountListService : public AccountService {
 
     void addAccount(MinecraftAccountPtr account) override;
     void removeAccount(QModelIndex index) override;
+    void removeAccountAt(int row) override;
 
     int findAccountByProfileId(const QString& profileId) const override;
     MinecraftAccountPtr getAccountByProfileName(const QString& profileName) const override;

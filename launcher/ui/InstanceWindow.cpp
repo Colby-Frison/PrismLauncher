@@ -50,7 +50,8 @@
 
 #include "icons/IconList.h"
 
-InstanceWindow::InstanceWindow(MinecraftInstance* instance, QWidget* parent) : QMainWindow(parent), m_instance(instance)
+InstanceWindow::InstanceWindow(MinecraftInstance* instance, InstanceCatalog* catalog, LauncherSettings* settings, QWidget* parent)
+    : QMainWindow(parent), m_instance(instance)
 {
     setAttribute(Qt::WA_DeleteOnClose);
 
@@ -65,7 +66,7 @@ InstanceWindow::InstanceWindow(MinecraftInstance* instance, QWidget* parent) : Q
 
     // Add page container
     {
-        auto provider = std::make_shared<InstancePageProvider>(m_instance);
+        auto provider = std::make_shared<InstancePageProvider>(m_instance, catalog, settings);
         m_container = new PageContainer(provider.get(), "console", this);
         m_container->setParentContainer(this);
         setCentralWidget(m_container);

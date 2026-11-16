@@ -82,6 +82,31 @@ void AccountCoordinator::removeAccount(QModelIndex index)
     m_accounts->removeAccount(index);
 }
 
+AccountCoordinator::AddOutcome AccountCoordinator::replaceAccount(MinecraftAccountPtr oldAccount, MinecraftAccountPtr newAccount)
+{
+    if (!m_accounts || !oldAccount || !newAccount) {
+        return AddOutcome::Rejected;
+    }
+
+    const bool wasDefault = m_accounts->defaultAccount() == oldAccount;
+    int row = -1;
+    for (int i = 0; i < m_accounts->count(); ++i) {
+        if (m_accounts->at(i) == oldAccount) {
+            row = i;
+            break;
+        }
+    }
+    if (row < 0) {
+        row = m_accounts->findAccountByProfileId(oldAccount->profileId());
+    }
+    if (row < 0) {
+        return AddOutcome::Rejected;
+    }
+
+    m_accounts->removeAccountAt(row);
+    return addAccount(newAccount, wasDefault);
+}
+
 void AccountCoordinator::deliverOAuthReply(const QVariantMap& data)
 {
     emit oauthReplyReceived(data);

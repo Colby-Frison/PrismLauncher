@@ -179,7 +179,7 @@ MainWindow::MainWindow(LauncherSettings* settings,
     , m_instances(instances)
     , m_accounts(accounts)
     , m_network(network)
-    , m_launches(launches)
+    , m_launchCoordinator(launches)
     , m_launchExtras(launchExtras)
     , m_accountCoordinator(accountCoordinator)
 {
@@ -1075,7 +1075,9 @@ void MainWindow::processURLs(QList<QUrl> urls)
                 const auto items = query.queryItems();
                 for (auto it = items.begin(), end = items.end(); it != end; ++it)
                     receivedData.insert(it->first, it->second);
-                APPLICATION->accountCoordinator()->deliverOAuthReply(receivedData);
+                if (m_accountCoordinator) {
+                    m_accountCoordinator->deliverOAuthReply(receivedData);
+                }
                 continue;
             } else if ((url.scheme() == "prismlauncher" || url.scheme() == BuildConfig.LAUNCHER_APP_BINARY_NAME) && isExternalURLImport) {
                 // PrismLauncher URL protocol modpack import
@@ -1683,7 +1685,7 @@ void MainWindow::on_actionKillInstance_triggered()
 
 bool MainWindow::requestLaunch(MinecraftInstance* instance, LaunchMode mode)
 {
-    if (!instance || !m_launches) {
+    if (!instance || !m_launchCoordinator) {
         return false;
     }
 
@@ -1693,20 +1695,15 @@ bool MainWindow::requestLaunch(MinecraftInstance* instance, LaunchMode mode)
     request.parentWidget = this;
     request.profiler = APPLICATION->profilers().value(instance->settings()->get("Profiler").toString(), nullptr).get();
 
-    const auto outcome = m_launches->requestLaunch(request);
-    if (outcome == LaunchCoordinator::LaunchOutcome::BlockedByUpdate) {
-        qDebug() << "Cannot launch instances while an update is running. Please try again when updates are completed.";
-    }
-    const auto windowHint = LaunchUiHints::instanceWindowHintFor(outcome);
-    if (windowHint.open) {
-        APPLICATION->showInstanceWindow(instance, windowHint.page);
-    }
-    return LaunchUiHints::launchAccepted(outcome);
+    const auto outcome = m_launchCoordinator->requestLaunch(request);
+    return LaunchUiHints::handleLaunchOutcome(outcome, [instance](const LaunchUiHints::InstanceWindowHint& hint) {
+        APPLICATION->showInstanceWindow(instance, hint.page);
+    });
 }
 
 bool MainWindow::requestKill(BaseInstance* instance)
 {
-    return LaunchUiHints::killInstance(m_launches, m_launchExtras, instance);
+    return LaunchUiHints::killInstance(m_launchCoordinator, m_launchExtras, instance);
 }
 
 void MainWindow::on_actionCreateInstanceShortcut_triggered()

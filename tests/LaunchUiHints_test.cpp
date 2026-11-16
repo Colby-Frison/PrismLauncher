@@ -77,6 +77,10 @@ class LaunchUiHintsTest : public QObject {
     void runningOpensConsole();
     void editableOpensInstance();
     void launchAcceptedOutcomes();
+    void handleLaunchOutcomeStartedNoWindow();
+    void handleLaunchOutcomeBlockedNoWindow();
+    void handleLaunchOutcomeOpensConsole();
+    void handleLaunchOutcomeOpensInstance();
     void killNullOrNotRunningFails();
     void killRunningWithoutControllerSucceeds();
     void killWithControllerUsesAbort();
@@ -156,6 +160,54 @@ void LaunchUiHintsTest::launchAcceptedOutcomes()
     QVERIFY(LaunchUiHints::launchAccepted(LaunchCoordinator::LaunchOutcome::ShowInstanceBecauseEditable));
     QVERIFY(!LaunchUiHints::launchAccepted(LaunchCoordinator::LaunchOutcome::BlockedByUpdate));
     QVERIFY(!LaunchUiHints::launchAccepted(LaunchCoordinator::LaunchOutcome::Rejected));
+}
+
+void LaunchUiHintsTest::handleLaunchOutcomeStartedNoWindow()
+{
+    int showCalls = 0;
+    const bool accepted = LaunchUiHints::handleLaunchOutcome(LaunchCoordinator::LaunchOutcome::Started,
+                                                             [&](const LaunchUiHints::InstanceWindowHint&) { ++showCalls; });
+    QVERIFY(accepted);
+    QCOMPARE(showCalls, 0);
+}
+
+void LaunchUiHintsTest::handleLaunchOutcomeBlockedNoWindow()
+{
+    int showCalls = 0;
+    const bool accepted = LaunchUiHints::handleLaunchOutcome(LaunchCoordinator::LaunchOutcome::BlockedByUpdate,
+                                                             [&](const LaunchUiHints::InstanceWindowHint&) { ++showCalls; });
+    QVERIFY(!accepted);
+    QCOMPARE(showCalls, 0);
+}
+
+void LaunchUiHintsTest::handleLaunchOutcomeOpensConsole()
+{
+    int showCalls = 0;
+    QString page;
+    const bool accepted =
+        LaunchUiHints::handleLaunchOutcome(LaunchCoordinator::LaunchOutcome::ShowConsoleBecauseRunning,
+                                           [&](const LaunchUiHints::InstanceWindowHint& hint) {
+                                               ++showCalls;
+                                               page = hint.page;
+                                           });
+    QVERIFY(accepted);
+    QCOMPARE(showCalls, 1);
+    QCOMPARE(page, QStringLiteral("console"));
+}
+
+void LaunchUiHintsTest::handleLaunchOutcomeOpensInstance()
+{
+    int showCalls = 0;
+    bool open = false;
+    const bool accepted =
+        LaunchUiHints::handleLaunchOutcome(LaunchCoordinator::LaunchOutcome::ShowInstanceBecauseEditable,
+                                           [&](const LaunchUiHints::InstanceWindowHint& hint) {
+                                               ++showCalls;
+                                               open = hint.open;
+                                           });
+    QVERIFY(accepted);
+    QCOMPARE(showCalls, 1);
+    QVERIFY(open);
 }
 
 void LaunchUiHintsTest::killNullOrNotRunningFails()

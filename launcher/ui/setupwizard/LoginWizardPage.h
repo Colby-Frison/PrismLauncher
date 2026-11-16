@@ -6,11 +6,13 @@ namespace Ui {
 class LoginWizardPage;
 }
 
+class AccountCoordinator;
+
 class LoginWizardPage : public BaseWizardPage {
     Q_OBJECT
 
    public:
-    explicit LoginWizardPage(QWidget* parent = nullptr);
+    explicit LoginWizardPage(AccountCoordinator* accountCoordinator, QWidget* parent = nullptr);
     ~LoginWizardPage();
 
     void initializePage() override;
@@ -20,5 +22,6 @@ class LoginWizardPage : public BaseWizardPage {
     void on_pushButton_clicked();
 
    private:
+    AccountCoordinator* m_accountCoordinator = nullptr;
     Ui::LoginWizardPage* ui;
 };

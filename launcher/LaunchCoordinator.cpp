@@ -20,8 +20,11 @@
 
 #include <QMetaObject>
 
-LaunchCoordinator::LaunchCoordinator(ILaunchExtrasStore* extras, IRunningInstanceCounter* running, bool updateRunning)
-    : m_extras(extras), m_running(running), m_updateRunning(updateRunning)
+LaunchCoordinator::LaunchCoordinator(ILaunchExtrasStore* extras,
+                                     IRunningInstanceCounter* running,
+                                     bool updateRunning,
+                                     AccountCoordinator* accounts)
+    : m_extras(extras), m_running(running), m_accounts(accounts), m_updateRunning(updateRunning)
 {
 }
 
@@ -46,6 +49,7 @@ LaunchCoordinator::LaunchOutcome LaunchCoordinator::requestLaunch(const LaunchRe
         controller->setAccountToUse(request.accountToUse);
         controller->setOfflineName(request.offlineName);
         controller->setParentWidget(request.parentWidget);
+        controller->setAccountCoordinator(m_accounts);
 
         auto* raw = controller.get();
         m_extras->setController(request.instance->id(), std::move(controller));

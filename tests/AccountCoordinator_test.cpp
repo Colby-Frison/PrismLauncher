@@ -26,6 +26,7 @@ class FakeAccountService : public AccountService {
     int requestRefreshCalls = 0;
     QString lastRefreshId;
     QModelIndex lastRemovedIndex;
+    int lastRemovedRow = -1;
     MinecraftAccountPtr lastAdded;
     MinecraftAccountPtr lastSetDefault;
 
@@ -48,17 +49,35 @@ class FakeAccountService : public AccountService {
 
     void removeAccount(QModelIndex index) override
     {
-        ++removeAccountCalls;
         lastRemovedIndex = index;
         if (index.isValid() && index.row() >= 0 && index.row() < accounts.size()) {
-            if (accounts.at(index.row()) == defaultAcct) {
+            removeAccountAt(index.row());
+            return;
+        }
+        ++removeAccountCalls;
+    }
+
+    void removeAccountAt(int row) override
+    {
+        ++removeAccountCalls;
+        lastRemovedRow = row;
+        if (row >= 0 && row < accounts.size()) {
+            if (accounts.at(row) == defaultAcct) {
                 defaultAcct = nullptr;
             }
-            accounts.removeAt(index.row());
+            accounts.removeAt(row);
         }
     }
 
-    int findAccountByProfileId(const QString&) const override { return -1; }
+    int findAccountByProfileId(const QString& profileId) const override
+    {
+        for (int i = 0; i < accounts.size(); ++i) {
+            if (accounts.at(i) && accounts.at(i)->profileId() == profileId) {
+                return i;
+            }
+        }
+        return -1;
+    }
     MinecraftAccountPtr getAccountByProfileName(const QString&) const override { return nullptr; }
     QStringList profileNames() const override { return {}; }
 
@@ -91,6 +110,7 @@ class FakeAccountService : public AccountService {
         requestRefreshCalls = 0;
         lastRefreshId.clear();
         lastRemovedIndex = QModelIndex();
+        lastRemovedRow = -1;
         lastAdded = nullptr;
         lastSetDefault = nullptr;
     }
@@ -114,6 +134,9 @@ class AccountCoordinatorTest : public QObject {
     void refreshRequestsByInternalId();
     void clearDefaultClears();
     void removeDelegatesToService();
+    void replaceAccountRemovesThenAdds();
+    void replaceAccountRestoresDefault();
+    void replaceMissingAccountRejected();
     void oauthReplyIsDelivered();
 
    private:
@@ -245,6 +268,52 @@ void AccountCoordinatorTest::removeDelegatesToService()
     m_coordinator->removeAccount(QModelIndex());
 
     QCOMPARE(m_accounts->removeAccountCalls, 1);
+}
+
+void AccountCoordinatorTest::replaceAccountRemovesThenAdds()
+{
+    auto oldAccount = MinecraftAccount::createBlankMSA();
+    auto newAccount = MinecraftAccount::createBlankMSA();
+    m_coordinator->addAccount(oldAccount);
+    m_accounts->resetCallCounts();
+
+    const auto outcome = m_coordinator->replaceAccount(oldAccount, newAccount);
+
+    QCOMPARE(outcome, AccountCoordinator::AddOutcome::AddedAndSetDefault);
+    QCOMPARE(m_accounts->removeAccountCalls, 1);
+    QCOMPARE(m_accounts->lastRemovedRow, 0);
+    QCOMPARE(m_accounts->addAccountCalls, 1);
+    QCOMPARE(m_accounts->count(), 1);
+    QCOMPARE(m_accounts->at(0), newAccount);
+}
+
+void AccountCoordinatorTest::replaceAccountRestoresDefault()
+{
+    auto first = MinecraftAccount::createBlankMSA();
+    auto second = MinecraftAccount::createBlankMSA();
+    auto replacement = MinecraftAccount::createBlankMSA();
+    m_coordinator->addAccount(first);
+    m_coordinator->addAccount(second, true);
+    QCOMPARE(m_accounts->defaultAccount(), second);
+    m_accounts->resetCallCounts();
+
+    const auto outcome = m_coordinator->replaceAccount(second, replacement);
+
+    QCOMPARE(outcome, AccountCoordinator::AddOutcome::AddedAndSetDefault);
+    QCOMPARE(m_accounts->defaultAccount(), replacement);
+    QCOMPARE(m_accounts->count(), 2);
+}
+
+void AccountCoordinatorTest::replaceMissingAccountRejected()
+{
+    auto missing = MinecraftAccount::createBlankMSA();
+    auto replacement = MinecraftAccount::createBlankMSA();
+
+    const auto outcome = m_coordinator->replaceAccount(missing, replacement);
+
+    QCOMPARE(outcome, AccountCoordinator::AddOutcome::Rejected);
+    QCOMPARE(m_accounts->addAccountCalls, 0);
+    QCOMPARE(m_accounts->removeAccountCalls, 0);
 }
 
 void AccountCoordinatorTest::oauthReplyIsDelivered()

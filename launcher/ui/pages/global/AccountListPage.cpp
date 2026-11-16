@@ -50,8 +50,10 @@
 
 #include "AccountCoordinator.h"
 #include "Application.h"
+#include "services/AccountService.h"
 
-AccountListPage::AccountListPage(QWidget* parent) : QMainWindow(parent), ui(new Ui::AccountListPage)
+AccountListPage::AccountListPage(AccountCoordinator* accountCoordinator, AccountService* accounts, QWidget* parent)
+    : QMainWindow(parent), m_accountCoordinator(accountCoordinator), ui(new Ui::AccountListPage)
 {
     ui->setupUi(this);
     ui->listView->setEmptyString(
@@ -60,7 +62,7 @@ AccountListPage::AccountListPage(QWidget* parent) : QMainWindow(parent), ui(new 
     ui->listView->setEmptyMode(VersionListView::String);
     ui->listView->setContextMenuPolicy(Qt::CustomContextMenu);
 
-    m_accounts = APPLICATION->accounts();
+    m_accounts = accounts ? accounts->model() : nullptr;
 
     ui->listView->setModel(m_accounts);
     ui->listView->header()->setSectionResizeMode(AccountList::VListColumns::ProfileNameColumn, QHeaderView::Stretch);
@@ -76,12 +78,16 @@ AccountListPage::AccountListPage(QWidget* parent) : QMainWindow(parent), ui(new 
             [this]([[maybe_unused]] const QItemSelection& sel, [[maybe_unused]] const QItemSelection& dsel) { updateButtonStates(); });
     connect(ui->listView, &VersionListView::customContextMenuRequested, this, &AccountListPage::ShowContextMenu);
     connect(ui->listView, &VersionListView::activated, this, [this](const QModelIndex& index) {
-        APPLICATION->accountCoordinator()->setDefaultAccount(m_accounts->at(index.row()));
+        if (m_accountCoordinator && m_accounts) {
+            m_accountCoordinator->setDefaultAccount(m_accounts->at(index.row()));
+        }
     });
 
-    connect(m_accounts, &AccountList::listChanged, this, &AccountListPage::listChanged);
-    connect(m_accounts, &AccountList::listActivityChanged, this, &AccountListPage::listChanged);
-    connect(m_accounts, &AccountList::defaultAccountChanged, this, &AccountListPage::listChanged);
+    if (m_accounts) {
+        connect(m_accounts, &AccountList::listChanged, this, &AccountListPage::listChanged);
+        connect(m_accounts, &AccountList::listActivityChanged, this, &AccountListPage::listChanged);
+        connect(m_accounts, &AccountList::defaultAccountChanged, this, &AccountListPage::listChanged);
+    }
 
     updateButtonStates();
 
@@ -132,14 +138,16 @@ void AccountListPage::listChanged()
 void AccountListPage::on_actionAddMicrosoft_triggered()
 {
     auto account = MSALoginDialog::newAccount(this);
-    if (account) {
-        APPLICATION->accountCoordinator()->addAccount(account);
+    if (account && m_accountCoordinator) {
+        m_accountCoordinator->addAccount(account);
     }
 }
 
 void AccountListPage::on_actionAddOffline_triggered()
 {
-    auto* coordinator = APPLICATION->accountCoordinator();
+    if (!m_accountCoordinator || !m_accounts) {
+        return;
+    }
     if (!m_accounts->anyAccountIsValid()) {
         QMessageBox::warning(this, tr("Error"),
                              tr("You must add a Microsoft account that owns Minecraft before you can add an offline account."
@@ -155,7 +163,7 @@ void AccountListPage::on_actionAddOffline_triggered()
 
     if (const MinecraftAccountPtr account = MinecraftAccount::createOffline(dialog.getUsername())) {
         account->login()->start();  // The task will complete here.
-        const auto outcome = coordinator->addOfflineAccount(account);
+        const auto outcome = m_accountCoordinator->addOfflineAccount(account);
         if (outcome == AccountCoordinator::AddOutcome::RejectedMissingMicrosoftAccount) {
             QMessageBox::warning(this, tr("Error"),
                                  tr("You must add a Microsoft account that owns Minecraft before you can add an offline account."
@@ -174,35 +182,37 @@ void AccountListPage::on_actionRemove_triggered()
         return;
     }
     QModelIndexList selection = ui->listView->selectionModel()->selectedIndexes();
-    if (selection.size() > 0) {
+    if (selection.size() > 0 && m_accountCoordinator) {
         QModelIndex selected = selection.first();
-        APPLICATION->accountCoordinator()->removeAccount(selected);
+        m_accountCoordinator->removeAccount(selected);
     }
 }
 
 void AccountListPage::on_actionRefresh_triggered()
 {
     QModelIndexList selection = ui->listView->selectionModel()->selectedIndexes();
-    if (selection.size() > 0) {
+    if (selection.size() > 0 && m_accountCoordinator) {
         QModelIndex selected = selection.first();
         MinecraftAccountPtr account = selected.data(AccountList::PointerRole).value<MinecraftAccountPtr>();
-        APPLICATION->accountCoordinator()->refreshAccount(account);
+        m_accountCoordinator->refreshAccount(account);
     }
 }
 
 void AccountListPage::on_actionSetDefault_triggered()
 {
     QModelIndexList selection = ui->listView->selectionModel()->selectedIndexes();
-    if (selection.size() > 0) {
+    if (selection.size() > 0 && m_accountCoordinator) {
         QModelIndex selected = selection.first();
         MinecraftAccountPtr account = selected.data(AccountList::PointerRole).value<MinecraftAccountPtr>();
-        APPLICATION->accountCoordinator()->setDefaultAccount(account);
+        m_accountCoordinator->setDefaultAccount(account);
     }
 }
 
 void AccountListPage::on_actionNoDefault_triggered()
 {
-    APPLICATION->accountCoordinator()->clearDefaultAccount();
+    if (m_accountCoordinator) {
+        m_accountCoordinator->clearDefaultAccount();
+    }
 }
 
 void AccountListPage::updateButtonStates()
@@ -221,7 +231,7 @@ void AccountListPage::updateButtonStates()
         accountIsOnline = account->accountType() != AccountType::Offline;
 
         accountCanMoveUp = selected.row() > 0;
-        int indexOfLast = m_accounts->count() - 1;
+        int indexOfLast = m_accounts ? m_accounts->count() - 1 : -1;
         accountCanMoveDown = selected.row() < indexOfLast;
     }
     ui->actionRemove->setEnabled(accountIsReady);
@@ -229,7 +239,7 @@ void AccountListPage::updateButtonStates()
     ui->actionManageSkins->setEnabled(accountIsReady && accountIsOnline);
     ui->actionRefresh->setEnabled(accountIsReady && accountIsOnline);
 
-    if (m_accounts->defaultAccount().get() == nullptr) {
+    if (!m_accounts || m_accounts->defaultAccount().get() == nullptr) {
         ui->actionNoDefault->setEnabled(false);
         ui->actionNoDefault->setChecked(true);
     } else {
@@ -255,7 +265,7 @@ void AccountListPage::on_actionManageSkins_triggered()
 void AccountListPage::on_actionMoveUp_triggered()
 {
     QModelIndexList selection = ui->listView->selectionModel()->selectedIndexes();
-    if (selection.size() > 0) {
+    if (selection.size() > 0 && m_accounts) {
         QModelIndex selected = selection.first();
         m_accounts->moveAccount(selected, -1);
     }
@@ -264,7 +274,7 @@ void AccountListPage::on_actionMoveUp_triggered()
 void AccountListPage::on_actionMoveDown_triggered()
 {
     QModelIndexList selection = ui->listView->selectionModel()->selectedIndexes();
-    if (selection.size() > 0) {
+    if (selection.size() > 0 && m_accounts) {
         QModelIndex selected = selection.first();
         m_accounts->moveAccount(selected, 1);
     }

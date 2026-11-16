@@ -40,6 +40,7 @@
 #include "minecraft/auth/MinecraftAccount.h"
 #include "minecraft/launch/MinecraftTarget.h"
 
+class AccountCoordinator;
 class InstanceWindow;
 
 enum class LaunchDecision { Undecided, Continue, Abort };
@@ -67,6 +68,8 @@ class LaunchController : public Task {
     void setTargetToJoin(MinecraftTarget::Ptr targetToJoin) { m_targetToJoin = std::move(targetToJoin); }
 
     void setAccountToUse(MinecraftAccountPtr accountToUse) { m_accountToUse = std::move(accountToUse); }
+
+    void setAccountCoordinator(AccountCoordinator* accounts) { m_accountCoordinator = accounts; }
 
     QString id() const { return m_instance->id(); }
 
@@ -97,6 +100,7 @@ class LaunchController : public Task {
     QWidget* m_parentWidget = nullptr;
     InstanceWindow* m_console = nullptr;
     MinecraftAccountPtr m_accountToUse = nullptr;
+    AccountCoordinator* m_accountCoordinator = nullptr;
     AuthSessionPtr m_session = nullptr;
     LaunchTask* m_launcher = nullptr;
     MinecraftTarget::Ptr m_targetToJoin = nullptr;

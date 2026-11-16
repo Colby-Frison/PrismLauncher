@@ -19,19 +19,28 @@ namespace Ui {
 class ManagedPackPage;
 }
 
+class InstanceCatalog;
 class InstanceTask;
 class InstanceWindow;
+class LauncherSettings;
 
 class ManagedPackPage : public QWidget, public BasePage {
     Q_OBJECT
 
    public:
-    static ManagedPackPage* createPage(BaseInstance* inst, QWidget* parent = nullptr)
+    static ManagedPackPage* createPage(BaseInstance* inst,
+                                       InstanceCatalog* catalog,
+                                       LauncherSettings* settings,
+                                       QWidget* parent = nullptr)
     {
-        return ManagedPackPage::createPage(inst, inst->getManagedPackType(), parent);
+        return ManagedPackPage::createPage(inst, inst->getManagedPackType(), catalog, settings, parent);
     }
 
-    static ManagedPackPage* createPage(BaseInstance* inst, const QString& type, QWidget* parent = nullptr);
+    static ManagedPackPage* createPage(BaseInstance* inst,
+                                       const QString& type,
+                                       InstanceCatalog* catalog,
+                                       LauncherSettings* settings,
+                                       QWidget* parent = nullptr);
     ~ManagedPackPage() override;
 
     QString displayName() const override;
@@ -75,7 +84,11 @@ class ManagedPackPage : public QWidget, public BasePage {
     void setFailState();
 
    protected:
-    ManagedPackPage(BaseInstance* inst, InstanceWindow* instanceWindow, QWidget* parent = nullptr);
+    ManagedPackPage(BaseInstance* inst,
+                    InstanceWindow* instanceWindow,
+                    InstanceCatalog* catalog,
+                    LauncherSettings* settings,
+                    QWidget* parent = nullptr);
 
     /** Run the InstanceTask, with a progress dialog and all.
      *  Similar to MainWindow::instanceFromInstanceTask
@@ -90,6 +103,8 @@ class ManagedPackPage : public QWidget, public BasePage {
 
    protected:
     InstanceWindow* m_instanceWindow = nullptr;
+    InstanceCatalog* m_catalog = nullptr;
+    LauncherSettings* m_settings = nullptr;
 
     Ui::ManagedPackPage* ui;
     BaseInstance* m_inst;
@@ -102,8 +117,12 @@ class GenericManagedPackPage final : public ManagedPackPage {
     Q_OBJECT
 
    public:
-    GenericManagedPackPage(BaseInstance* inst, InstanceWindow* instanceWindow, QWidget* parent = nullptr)
-        : ManagedPackPage(inst, instanceWindow, parent)
+    GenericManagedPackPage(BaseInstance* inst,
+                           InstanceWindow* instanceWindow,
+                           InstanceCatalog* catalog,
+                           LauncherSettings* settings,
+                           QWidget* parent = nullptr)
+        : ManagedPackPage(inst, instanceWindow, catalog, settings, parent)
     {}
     ~GenericManagedPackPage() override = default;
 
@@ -115,7 +134,11 @@ class ModrinthManagedPackPage final : public ManagedPackPage {
     Q_OBJECT
 
    public:
-    ModrinthManagedPackPage(BaseInstance* inst, InstanceWindow* instanceWindow, QWidget* parent = nullptr);
+    ModrinthManagedPackPage(BaseInstance* inst,
+                            InstanceWindow* instanceWindow,
+                            InstanceCatalog* catalog,
+                            LauncherSettings* settings,
+                            QWidget* parent = nullptr);
     ~ModrinthManagedPackPage() override = default;
 
     void parseManagedPack() override;
@@ -138,7 +161,11 @@ class FlameManagedPackPage final : public ManagedPackPage {
     Q_OBJECT
 
    public:
-    FlameManagedPackPage(BaseInstance* inst, InstanceWindow* instanceWindow, QWidget* parent = nullptr);
+    FlameManagedPackPage(BaseInstance* inst,
+                         InstanceWindow* instanceWindow,
+                         InstanceCatalog* catalog,
+                         LauncherSettings* settings,
+                         QWidget* parent = nullptr);
     ~FlameManagedPackPage() override = default;
 
     void parseManagedPack() override;
