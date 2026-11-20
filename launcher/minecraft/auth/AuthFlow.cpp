@@ -14,12 +14,25 @@
 #include "tasks/Task.h"
 
 #include "AuthFlow.h"
+#include "minecraft/auth/AuthProviderRegistry.h"
 
 #include <Application.h>
 
 AuthFlow::AuthFlow(AccountData* data, Action action) : Task(), m_data(data)
 {
-    if (data->type == AccountType::MSA) {
+    // Resolve MSA through the auth registry (R3.4). Persistence still uses AccountType.
+    const auto* msaProvider = Auth::AuthProviderRegistry::instance().find(QStringLiteral("msa"));
+    if (data->type == AccountType::MSA && msaProvider != nullptr) {
+        const bool interactive = action != Action::Refresh;
+        if (interactive && !msaProvider->hasCapability(Auth::AuthCapability::InteractiveLogin)) {
+            changeState(AccountTaskState::STATE_CREATED);
+            return;
+        }
+        if (!interactive && !msaProvider->hasCapability(Auth::AuthCapability::SilentRefresh)) {
+            changeState(AccountTaskState::STATE_CREATED);
+            return;
+        }
+
         if (action == Action::DeviceCode) {
             auto oauthStep = makeShared<MSADeviceCodeStep>(m_data);
             connect(oauthStep.get(), &MSADeviceCodeStep::authorizeWithBrowser, this, &AuthFlow::authorizeWithBrowserWithExtra);

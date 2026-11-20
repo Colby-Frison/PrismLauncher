@@ -120,9 +120,10 @@ class ResourceAPI {
     Task::Ptr getProjectVersions(const VersionSearchArgs& args, const Callback<QVector<ModPlatform::IndexedVersion>>& callbacks) const;
     virtual Task::Ptr getDependencyVersion(const DependencySearchArgs&, const Callback<ModPlatform::IndexedVersion>&) const;
 
-   protected:
-    ~ResourceAPI() = default;
+    // Public virtual so ModPlatformProvider::createResourceAPI can return std::unique_ptr<ResourceAPI>.
+    virtual ~ResourceAPI() = default;
 
+  protected:
     virtual QString debugName() const { return "External resource API"; }
 
     static QString mapMCVersionToModrinth(const Version& v);

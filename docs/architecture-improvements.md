@@ -83,7 +83,7 @@ Add an `AuthProvider` contract containing:
 
 Use static registration initially. Dynamic plugins are unnecessary unless distribution requirements later demand them.
 
-Skeleton: `ModPlatformProvider` (capability flags, page/install/`ResourceAPI` factories, cache key) and `ModPlatformRegistry` with `REGISTER_MOD_PLATFORM` — see `launcher/modplatform/ModPlatformRegistry.h`.
+Skeleton: `ModPlatformProvider` (capability flags, page/install/`ResourceAPI` factories, cache key) and `ModPlatformRegistry` with `REGISTER_MOD_PLATFORM` — see `launcher/modplatform/ModPlatformRegistry.h`. Auth mirrors this via `AuthProvider` / `AuthProviderRegistry` with `REGISTER_AUTH_PROVIDER` — see `launcher/minecraft/auth/AuthProviderRegistry.h`. Resource-download and new-instance dialogs iterate the mod-platform registry; account UI resolves MSA/offline through the auth registry.
 
 ### P0: Add a global, host-aware work scheduler
 
