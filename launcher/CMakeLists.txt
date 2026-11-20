@@ -139,6 +139,8 @@ set(NET_SOURCES
     net/Request.cpp
     net/Request.h
     net/RPCSink.h
+    net/WorkScheduler.cpp
+    net/WorkScheduler.h
 )
 
 # Game launch logic

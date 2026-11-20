@@ -72,3 +72,5 @@ ecm_add_test(Commandline_test.cpp LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_M
 
 ecm_add_test(LaunchPipelineBuilder_test.cpp LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_MAJOR}::Test
     TEST_NAME LaunchPipelineBuilder)
+ecm_add_test(WorkScheduler_test.cpp LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_MAJOR}::Test TEST_NAME WorkScheduler)
+
