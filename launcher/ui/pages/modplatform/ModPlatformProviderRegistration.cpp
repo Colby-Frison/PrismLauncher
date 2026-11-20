@@ -16,6 +16,8 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "modplatform/ModPlatformProviders.h"
+
 #include "Application.h"
 #include "minecraft/MinecraftInstance.h"
 #include "minecraft/PackProfile.h"
@@ -48,128 +50,146 @@ ModPlatform::ModLoaderTypes supportedLoaders(BaseInstance& instance)
     return minecraft->getPackProfile()->getSupportedModLoaders().value_or(ModPlatform::ModLoaderTypes(0));
 }
 
+void registerIfMissing(ModPlatform::ModPlatformProvider provider)
+{
+    auto& registry = ModPlatform::ModPlatformRegistry::instance();
+    if (registry.find(provider.id) != nullptr) {
+        return;
+    }
+    registry.registerProvider(std::move(provider));
+}
+
 }  // namespace
 
-// Registration order matches the historical NewInstanceDialog page order
-// (after Custom / Import, which remain special-cased).
-REGISTER_MOD_PLATFORM(atl, [] {
-    ModPlatform::ModPlatformProvider provider;
-    provider.id = QStringLiteral("atl");
-    provider.displayName = QStringLiteral("ATLauncher");
-    provider.iconName = QStringLiteral("atlauncher");
-    provider.cacheKey = QStringLiteral("ATLauncherPacks");
-    provider.capabilities = ModPlatform::ProviderCapability::NewInstancePage;
-    provider.createNewInstancePage = [](NewInstanceDialog* dialog) -> BasePage* { return new AtlPage(dialog); };
-    return provider;
-}());
+namespace ModPlatform {
 
-REGISTER_MOD_PLATFORM(flame, [] {
-    ModPlatform::ModPlatformProvider provider;
-    provider.id = QStringLiteral("flame");
-    provider.displayName = QStringLiteral("CurseForge");
-    provider.iconName = QStringLiteral("flame");
-    provider.cacheKey = QStringLiteral("FlameMods");
-    provider.capabilities = ModPlatform::ProviderCapability::NewInstancePage | ModPlatform::ProviderCapability::ResourceMods |
-                            ModPlatform::ProviderCapability::ResourcePacks | ModPlatform::ProviderCapability::TexturePacks |
-                            ModPlatform::ProviderCapability::ShaderPacks | ModPlatform::ProviderCapability::DataPacks |
-                            ModPlatform::ProviderCapability::HasResourceAPI | ModPlatform::ProviderCapability::RequiresApiKey;
-    provider.isAvailable = [] { return (APPLICATION->capabilities() & Application::SupportsFlame) != 0U; };
-    provider.createNewInstancePage = [](NewInstanceDialog* dialog) -> BasePage* { return new FlamePage(dialog); };
-    provider.createResourceAPI = [] { return std::unique_ptr<ResourceAPI>(std::make_unique<FlameAPI>()); };
-    provider.createModPage = [](ResourceDownload::ResourceDownloadDialog* dialog, BaseInstance& instance) -> BasePage* {
-        if (!FlameAPI::validateModLoaders(supportedLoaders(instance))) {
-            return nullptr;
-        }
-        return ResourceDownload::Flame::createModPage(dialog, instance);
-    };
-    provider.createResourcePackPage = [](ResourceDownload::ResourceDownloadDialog* dialog, BaseInstance& instance) -> BasePage* {
-        return ResourceDownload::Flame::createResourcePackResourcePage(dialog, instance);
-    };
-    provider.createTexturePackPage = [](ResourceDownload::ResourceDownloadDialog* dialog, BaseInstance& instance) -> BasePage* {
-        return ResourceDownload::Flame::createTexturePackResourcePage(dialog, instance);
-    };
-    provider.createShaderPackPage = [](ResourceDownload::ResourceDownloadDialog* dialog, BaseInstance& instance) -> BasePage* {
-        return ResourceDownload::Flame::createShaderPackResourcePage(dialog, instance);
-    };
-    provider.createDataPackPage = [](ResourceDownload::ResourceDownloadDialog* dialog, BaseInstance& instance) -> BasePage* {
-        return ResourceDownload::Flame::createDataPackResourcePage(dialog, instance);
-    };
-    return provider;
-}());
+void ensureBuiltInProvidersRegistered()
+{
+    // Order matches the historical NewInstanceDialog page order
+    // (after Custom / Import, which remain special-cased).
+    {
+        ModPlatformProvider provider;
+        provider.id = QStringLiteral("atl");
+        provider.displayName = QStringLiteral("ATLauncher");
+        provider.iconName = QStringLiteral("atlauncher");
+        provider.cacheKey = QStringLiteral("ATLauncherPacks");
+        provider.capabilities = ProviderCapability::NewInstancePage;
+        provider.createNewInstancePage = [](NewInstanceDialog* dialog) -> BasePage* { return new AtlPage(dialog); };
+        registerIfMissing(std::move(provider));
+    }
+    {
+        ModPlatformProvider provider;
+        provider.id = QStringLiteral("flame");
+        provider.displayName = QStringLiteral("CurseForge");
+        provider.iconName = QStringLiteral("flame");
+        provider.cacheKey = QStringLiteral("FlameMods");
+        provider.capabilities = ProviderCapability::NewInstancePage | ProviderCapability::ResourceMods |
+                                ProviderCapability::ResourcePacks | ProviderCapability::TexturePacks | ProviderCapability::ShaderPacks |
+                                ProviderCapability::DataPacks | ProviderCapability::HasResourceAPI | ProviderCapability::RequiresApiKey;
+        provider.isAvailable = [] {
+            return APPLICATION != nullptr && (APPLICATION->capabilities() & Application::SupportsFlame) != 0U;
+        };
+        provider.createNewInstancePage = [](NewInstanceDialog* dialog) -> BasePage* { return new FlamePage(dialog); };
+        // Fresh API instances for registry consumers. Resource pages still use the
+        // established FlameAPI::get() singleton for behavior parity (R3.2).
+        provider.createResourceAPI = [] { return std::unique_ptr<ResourceAPI>(std::make_unique<FlameAPI>()); };
+        provider.createModPage = [](ResourceDownload::ResourceDownloadDialog* dialog, BaseInstance& instance) -> BasePage* {
+            if (!FlameAPI::validateModLoaders(supportedLoaders(instance))) {
+                return nullptr;
+            }
+            return ResourceDownload::Flame::createModPage(dialog, instance);
+        };
+        provider.createResourcePackPage = [](ResourceDownload::ResourceDownloadDialog* dialog, BaseInstance& instance) -> BasePage* {
+            return ResourceDownload::Flame::createResourcePackResourcePage(dialog, instance);
+        };
+        provider.createTexturePackPage = [](ResourceDownload::ResourceDownloadDialog* dialog, BaseInstance& instance) -> BasePage* {
+            return ResourceDownload::Flame::createTexturePackResourcePage(dialog, instance);
+        };
+        provider.createShaderPackPage = [](ResourceDownload::ResourceDownloadDialog* dialog, BaseInstance& instance) -> BasePage* {
+            return ResourceDownload::Flame::createShaderPackResourcePage(dialog, instance);
+        };
+        provider.createDataPackPage = [](ResourceDownload::ResourceDownloadDialog* dialog, BaseInstance& instance) -> BasePage* {
+            return ResourceDownload::Flame::createDataPackResourcePage(dialog, instance);
+        };
+        registerIfMissing(std::move(provider));
+    }
+    {
+        ModPlatformProvider provider;
+        provider.id = QStringLiteral("ftb");
+        provider.displayName = QStringLiteral("FTB");
+        provider.iconName = QStringLiteral("ftb_logo");
+        provider.cacheKey = QStringLiteral("FTBPacks");
+        provider.capabilities = ProviderCapability::NewInstancePage;
+        provider.createNewInstancePage = [](NewInstanceDialog* dialog) -> BasePage* { return new FtbPage(dialog); };
+        registerIfMissing(std::move(provider));
+    }
+    {
+        ModPlatformProvider provider;
+        provider.id = QStringLiteral("legacy_ftb");
+        provider.displayName = QStringLiteral("FTB Legacy");
+        provider.iconName = QStringLiteral("ftb_logo");
+        provider.cacheKey = QStringLiteral("LegacyFTBPacks");
+        provider.capabilities = ProviderCapability::NewInstancePage;
+        provider.createNewInstancePage = [](NewInstanceDialog* dialog) -> BasePage* { return new LegacyFTB::Page(dialog); };
+        registerIfMissing(std::move(provider));
+    }
+    {
+        ModPlatformProvider provider;
+        provider.id = QStringLiteral("import_ftb");
+        provider.displayName = QStringLiteral("FTB App Import");
+        provider.iconName = QStringLiteral("ftb_logo");
+        provider.cacheKey = QStringLiteral("ImportFTBPacks");
+        provider.capabilities = ProviderCapability::NewInstancePage;
+        provider.createNewInstancePage = [](NewInstanceDialog* dialog) -> BasePage* { return new FTBImportAPP::ImportFTBPage(dialog); };
+        registerIfMissing(std::move(provider));
+    }
+    {
+        ModPlatformProvider provider;
+        provider.id = QStringLiteral("modrinth");
+        provider.displayName = QStringLiteral("Modrinth");
+        provider.iconName = QStringLiteral("modrinth");
+        provider.cacheKey = QStringLiteral("ModrinthPacks");
+        provider.capabilities = ProviderCapability::NewInstancePage | ProviderCapability::ResourceMods | ProviderCapability::ResourcePacks |
+                                ProviderCapability::TexturePacks | ProviderCapability::ShaderPacks | ProviderCapability::DataPacks |
+                                ProviderCapability::HasResourceAPI;
+        provider.createNewInstancePage = [](NewInstanceDialog* dialog) -> BasePage* { return new ModrinthPage(dialog); };
+        provider.createResourceAPI = [] { return std::unique_ptr<ResourceAPI>(std::make_unique<ModrinthAPI>()); };
+        provider.createModPage = [](ResourceDownload::ResourceDownloadDialog* dialog, BaseInstance& instance) -> BasePage* {
+            if (!ModrinthAPI::validateModLoaders(supportedLoaders(instance))) {
+                return nullptr;
+            }
+            return ResourceDownload::Modrinth::createModPage(dialog, instance);
+        };
+        provider.createResourcePackPage = [](ResourceDownload::ResourceDownloadDialog* dialog, BaseInstance& instance) -> BasePage* {
+            return ResourceDownload::Modrinth::createResourcePackResourcePage(dialog, instance);
+        };
+        provider.createTexturePackPage = [](ResourceDownload::ResourceDownloadDialog* dialog, BaseInstance& instance) -> BasePage* {
+            return ResourceDownload::Modrinth::createTexturePackResourcePage(dialog, instance);
+        };
+        provider.createShaderPackPage = [](ResourceDownload::ResourceDownloadDialog* dialog, BaseInstance& instance) -> BasePage* {
+            return ResourceDownload::Modrinth::createShaderPackResourcePage(dialog, instance);
+        };
+        provider.createDataPackPage = [](ResourceDownload::ResourceDownloadDialog* dialog, BaseInstance& instance) -> BasePage* {
+            return ResourceDownload::Modrinth::createDataPackResourcePage(dialog, instance);
+        };
+        registerIfMissing(std::move(provider));
+    }
+    {
+        ModPlatformProvider provider;
+        provider.id = QStringLiteral("technic");
+        provider.displayName = QStringLiteral("Technic");
+        provider.iconName = QStringLiteral("technic");
+        provider.cacheKey = QStringLiteral("TechnicPacks");
+        provider.capabilities = ProviderCapability::NewInstancePage;
+        provider.createNewInstancePage = [](NewInstanceDialog* dialog) -> BasePage* { return new TechnicPage(dialog); };
+        registerIfMissing(std::move(provider));
+    }
+}
 
-REGISTER_MOD_PLATFORM(ftb, [] {
-    ModPlatform::ModPlatformProvider provider;
-    provider.id = QStringLiteral("ftb");
-    provider.displayName = QStringLiteral("FTB");
-    provider.iconName = QStringLiteral("ftb_logo");
-    provider.cacheKey = QStringLiteral("FTBPacks");
-    provider.capabilities = ModPlatform::ProviderCapability::NewInstancePage;
-    provider.createNewInstancePage = [](NewInstanceDialog* dialog) -> BasePage* { return new FtbPage(dialog); };
-    return provider;
-}());
+}  // namespace ModPlatform
 
-REGISTER_MOD_PLATFORM(legacy_ftb, [] {
-    ModPlatform::ModPlatformProvider provider;
-    provider.id = QStringLiteral("legacy_ftb");
-    provider.displayName = QStringLiteral("FTB Legacy");
-    provider.iconName = QStringLiteral("ftb_logo");
-    provider.cacheKey = QStringLiteral("LegacyFTBPacks");
-    provider.capabilities = ModPlatform::ProviderCapability::NewInstancePage;
-    provider.createNewInstancePage = [](NewInstanceDialog* dialog) -> BasePage* { return new LegacyFTB::Page(dialog); };
-    return provider;
-}());
-
-REGISTER_MOD_PLATFORM(import_ftb, [] {
-    ModPlatform::ModPlatformProvider provider;
-    provider.id = QStringLiteral("import_ftb");
-    provider.displayName = QStringLiteral("FTB App Import");
-    provider.iconName = QStringLiteral("ftb_logo");
-    provider.cacheKey = QStringLiteral("ImportFTBPacks");
-    provider.capabilities = ModPlatform::ProviderCapability::NewInstancePage;
-    provider.createNewInstancePage = [](NewInstanceDialog* dialog) -> BasePage* { return new FTBImportAPP::ImportFTBPage(dialog); };
-    return provider;
-}());
-
-REGISTER_MOD_PLATFORM(modrinth, [] {
-    ModPlatform::ModPlatformProvider provider;
-    provider.id = QStringLiteral("modrinth");
-    provider.displayName = QStringLiteral("Modrinth");
-    provider.iconName = QStringLiteral("modrinth");
-    provider.cacheKey = QStringLiteral("ModrinthPacks");
-    provider.capabilities = ModPlatform::ProviderCapability::NewInstancePage | ModPlatform::ProviderCapability::ResourceMods |
-                            ModPlatform::ProviderCapability::ResourcePacks | ModPlatform::ProviderCapability::TexturePacks |
-                            ModPlatform::ProviderCapability::ShaderPacks | ModPlatform::ProviderCapability::DataPacks |
-                            ModPlatform::ProviderCapability::HasResourceAPI;
-    provider.createNewInstancePage = [](NewInstanceDialog* dialog) -> BasePage* { return new ModrinthPage(dialog); };
-    provider.createResourceAPI = [] { return std::unique_ptr<ResourceAPI>(std::make_unique<ModrinthAPI>()); };
-    provider.createModPage = [](ResourceDownload::ResourceDownloadDialog* dialog, BaseInstance& instance) -> BasePage* {
-        if (!ModrinthAPI::validateModLoaders(supportedLoaders(instance))) {
-            return nullptr;
-        }
-        return ResourceDownload::Modrinth::createModPage(dialog, instance);
-    };
-    provider.createResourcePackPage = [](ResourceDownload::ResourceDownloadDialog* dialog, BaseInstance& instance) -> BasePage* {
-        return ResourceDownload::Modrinth::createResourcePackResourcePage(dialog, instance);
-    };
-    provider.createTexturePackPage = [](ResourceDownload::ResourceDownloadDialog* dialog, BaseInstance& instance) -> BasePage* {
-        return ResourceDownload::Modrinth::createTexturePackResourcePage(dialog, instance);
-    };
-    provider.createShaderPackPage = [](ResourceDownload::ResourceDownloadDialog* dialog, BaseInstance& instance) -> BasePage* {
-        return ResourceDownload::Modrinth::createShaderPackResourcePage(dialog, instance);
-    };
-    provider.createDataPackPage = [](ResourceDownload::ResourceDownloadDialog* dialog, BaseInstance& instance) -> BasePage* {
-        return ResourceDownload::Modrinth::createDataPackResourcePage(dialog, instance);
-    };
-    return provider;
-}());
-
-REGISTER_MOD_PLATFORM(technic, [] {
-    ModPlatform::ModPlatformProvider provider;
-    provider.id = QStringLiteral("technic");
-    provider.displayName = QStringLiteral("Technic");
-    provider.iconName = QStringLiteral("technic");
-    provider.cacheKey = QStringLiteral("TechnicPacks");
-    provider.capabilities = ModPlatform::ProviderCapability::NewInstancePage;
-    provider.createNewInstancePage = [](NewInstanceDialog* dialog) -> BasePage* { return new TechnicPage(dialog); };
-    return provider;
-}());
+// Static registration entry: runs when this TU is linked into the process.
+static const bool registered_mod_platform_builtins = [] {
+    ModPlatform::ensureBuiltInProvidersRegistered();
+    return true;
+}();

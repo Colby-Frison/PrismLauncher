@@ -216,6 +216,7 @@ set(MINECRAFT_SOURCES
     minecraft/auth/AuthProviderRegistry.cpp
     minecraft/auth/AuthProviderRegistry.h
     minecraft/auth/AuthProviders.cpp
+    minecraft/auth/AuthProviders.h
     minecraft/auth/AuthSession.cpp
     minecraft/auth/AuthSession.h
     minecraft/auth/AuthStep.h
@@ -505,6 +506,7 @@ set(API_SOURCES
     modplatform/ResourceAPI.cpp
 
     modplatform/ModPlatformProvider.h
+    modplatform/ModPlatformProviders.h
     modplatform/ModPlatformRegistry.h
     modplatform/ModPlatformRegistry.cpp
 

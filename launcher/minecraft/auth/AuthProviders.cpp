@@ -16,25 +16,52 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "minecraft/auth/AuthProviders.h"
+
 #include "Application.h"
 #include "minecraft/auth/AuthProviderRegistry.h"
 
-// Static registration of built-in auth providers (R3.4).
-REGISTER_AUTH_PROVIDER(msa, [] {
-    Auth::AuthProvider provider;
-    provider.id = QStringLiteral("msa");
-    provider.displayName = QStringLiteral("Microsoft");
-    provider.capabilities = Auth::AuthCapability::InteractiveLogin | Auth::AuthCapability::SilentRefresh |
-                            Auth::AuthCapability::Persistence | Auth::AuthCapability::AccountCreationUI;
-    provider.isAvailable = [] { return (APPLICATION->capabilities() & Application::SupportsMSA) != 0U; };
-    return provider;
-}());
+namespace {
 
-REGISTER_AUTH_PROVIDER(offline, [] {
-    Auth::AuthProvider provider;
-    provider.id = QStringLiteral("offline");
-    provider.displayName = QStringLiteral("Offline");
-    provider.capabilities =
-        Auth::AuthCapability::OfflineSession | Auth::AuthCapability::Persistence | Auth::AuthCapability::AccountCreationUI;
-    return provider;
-}());
+void registerIfMissing(Auth::AuthProvider provider)
+{
+    auto& registry = Auth::AuthProviderRegistry::instance();
+    if (registry.find(provider.id) != nullptr) {
+        return;
+    }
+    registry.registerProvider(std::move(provider));
+}
+
+}  // namespace
+
+namespace Auth {
+
+void ensureBuiltInProvidersRegistered()
+{
+    {
+        AuthProvider provider;
+        provider.id = QStringLiteral("msa");
+        provider.displayName = QStringLiteral("Microsoft");
+        provider.capabilities = AuthCapability::InteractiveLogin | AuthCapability::SilentRefresh | AuthCapability::Persistence |
+                                AuthCapability::AccountCreationUI;
+        provider.isAvailable = [] {
+            return APPLICATION != nullptr && (APPLICATION->capabilities() & Application::SupportsMSA) != 0U;
+        };
+        registerIfMissing(std::move(provider));
+    }
+    {
+        AuthProvider provider;
+        provider.id = QStringLiteral("offline");
+        provider.displayName = QStringLiteral("Offline");
+        provider.capabilities = AuthCapability::OfflineSession | AuthCapability::Persistence | AuthCapability::AccountCreationUI;
+        registerIfMissing(std::move(provider));
+    }
+}
+
+}  // namespace Auth
+
+// Static registration entry: runs when this TU is linked into the process.
+static const bool registered_auth_providers = [] {
+    Auth::ensureBuiltInProvidersRegistered();
+    return true;
+}();

@@ -43,4 +43,6 @@ class AuthFlow : public Task {
     QList<AuthStep::Ptr> m_steps;
     AuthStep::Ptr m_currentStep;
     AccountData* m_data = nullptr;
+    /** MSA flows must have steps; empty step list should fail, not succeed. */
+    bool m_requiresSteps = false;
 };
