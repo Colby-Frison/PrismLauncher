@@ -528,6 +528,8 @@ InstanceList::InstListError InstanceList::loadList()
 
     for (auto& id : discoverInstances()) {
         if (existingIds.contains(id)) {
+            // Refresh the catalog entry: fields such as the managed pack can change on disk without a signal.
+            indexInstance(existingIds.value(id).first);
             existingIds.remove(id);
             qInfo() << "Should keep and soft-reload" << id;
         } else {
@@ -550,6 +552,9 @@ InstanceList::InstListError InstanceList::loadList()
         int currentItem = -1;
         auto removeNow = [this, &frontBookmark, &backBookmark, &currentItem]() {
             beginRemoveRows(QModelIndex(), frontBookmark, backBookmark);
+            for (int i = frontBookmark; i <= backBookmark; i++) {
+                unindexInstance(m_instances.at(i).get());
+            }
             m_instances.erase(m_instances.begin() + frontBookmark, m_instances.begin() + backBookmark + 1);
             endRemoveRows();
             frontBookmark = -1;
@@ -615,6 +620,7 @@ void InstanceList::add(std::vector<std::unique_ptr<MinecraftInstance>>& t)
     for (auto& ptr : t) {
         MinecraftInstance* inst = ptr.get();
         m_instances.push_back(std::move(ptr));
+        indexInstance(inst);
         connect(inst, &MinecraftInstance::propertiesChanged, this, [this, inst]() { propertiesChanged(inst); });
     }
     endInsertRows();
@@ -650,10 +656,13 @@ MinecraftInstance* InstanceList::getInstanceById(const QString& instId) const
     if (instId.isEmpty()) {
         return nullptr;
     }
-    for (const auto& inst : m_instances) {
-        if (inst->id() == instId || inst->uuid() == instId) {
-            return inst.get();
-        }
+    if (auto* inst = m_instanceById.value(instId, nullptr)) {
+        return inst;
+    }
+    // Callers may pass a UUID instead of the folder id.
+    const auto byUuid = m_catalog.findByUuid(instId);
+    if (!byUuid.isEmpty()) {
+        return m_instanceById.value(byUuid.first().id, nullptr);
     }
     return nullptr;
 }
@@ -663,14 +672,35 @@ MinecraftInstance* InstanceList::getInstanceByManagedName(const QString& managed
     if (managedName.isEmpty()) {
         return {};
     }
-
-    for (const auto& instance : m_instances) {
-        if (instance->getManagedPackName() == managedName) {
-            return instance.get();
-        }
+    const auto matches = m_catalog.findByManagedPackName(managedName);
+    if (matches.isEmpty()) {
+        return {};
     }
+    return m_instanceById.value(matches.first().id, nullptr);
+}
 
-    return {};
+void InstanceList::indexInstance(MinecraftInstance* inst)
+{
+    if (!inst) {
+        return;
+    }
+    m_instanceById.insert(inst->id(), inst);
+    const auto record = InstanceRecord::fromInstance(*inst);
+    if (!m_catalog.update(record)) {
+        m_catalog.add(record);
+    }
+}
+
+void InstanceList::unindexInstance(MinecraftInstance* inst)
+{
+    if (!inst) {
+        return;
+    }
+    const auto id = inst->id();
+    if (m_instanceById.value(id, nullptr) == inst) {
+        m_instanceById.remove(id);
+        m_catalog.remove(id);
+    }
 }
 
 QModelIndex InstanceList::getInstanceIndexById(const QString& id) const
@@ -691,6 +721,10 @@ int InstanceList::getInstIndex(MinecraftInstance* inst) const
 
 void InstanceList::propertiesChanged(MinecraftInstance* inst)
 {
+    // Keep the catalog's secondary indexes (name, icon, ...) current.
+    if (m_instanceById.value(inst->id(), nullptr) == inst) {
+        indexInstance(inst);
+    }
     int i = getInstIndex(inst);
     if (i != -1) {
         emit dataChanged(index(i), index(i));
@@ -941,6 +975,8 @@ void InstanceList::on_InstFolderChanged([[maybe_unused]] const Setting& setting,
         m_groupsLoaded = false;
         beginRemoveRows(QModelIndex(), 0, count());
         m_instances.erase(m_instances.begin(), m_instances.end());
+        m_instanceById.clear();
+        m_catalog.clear();
         endRemoveRows();
         emit instancesChanged();
     }

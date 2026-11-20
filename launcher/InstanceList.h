@@ -44,6 +44,7 @@
 #include <QStack>
 #include <cstdint>
 
+#include "InstanceCatalog.h"
 #include "minecraft/MinecraftInstance.h"
 
 class QFileSystemWatcher;
@@ -104,10 +105,13 @@ class InstanceList : public QAbstractListModel {
     InstListError loadList();
     void saveNow();
 
-    /* O(n) */
+    /* Indexed: O(1) by id, O(1) + O(k log k) by uuid (k = instances sharing that uuid) */
     MinecraftInstance* getInstanceById(const QString& id) const;
-    /* O(n) */
+    /* Indexed via the catalog's managed-pack-name index */
     MinecraftInstance* getInstanceByManagedName(const QString& managedName) const;
+
+    /// Read-only view of the indexed instance catalog (kept in sync with the loaded instances).
+    const InstanceCatalog& catalog() const { return m_catalog; }
     QModelIndex getInstanceIndexById(const QString& id) const;
     QStringList getGroups();
     bool isGroupCollapsed(const QString& groupName);
@@ -183,10 +187,16 @@ class InstanceList : public QAbstractListModel {
     void increaseGroupCount(const QString& group);
     void decreaseGroupCount(const QString& group);
 
+    void indexInstance(MinecraftInstance* inst);
+    void unindexInstance(MinecraftInstance* inst);
+
    private:
     int m_watchLevel = 0;
     bool m_dirty = false;
     std::vector<std::unique_ptr<MinecraftInstance>> m_instances;
+    // R5: indexed catalog of the loaded instances + id -> live object lookup
+    InstanceCatalog m_catalog;
+    QHash<InstanceId, MinecraftInstance*> m_instanceById;
     // id -> refs
     QMap<QString, int> m_groupNameCache;
 

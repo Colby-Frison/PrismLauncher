@@ -10,6 +10,8 @@ set(CORE_SOURCES
     BaseInstaller.cpp
     BaseVersionList.h
     BaseVersionList.cpp
+    InstanceCatalog.h
+    InstanceCatalog.cpp
     InstanceList.h
     InstanceList.cpp
     InstanceTask.h
