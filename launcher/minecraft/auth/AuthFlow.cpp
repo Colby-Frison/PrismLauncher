@@ -23,8 +23,6 @@ AuthFlow::AuthFlow(AccountData* data, Action action) : Task(), m_data(data)
     // Resolve MSA through the auth registry (R3.4). Persistence still uses AccountType.
     // Offline accounts historically have no AuthFlow steps and complete successfully.
     if (data->type == AccountType::MSA) {
-        m_requiresSteps = true;
-
         const auto* msaProvider = Auth::AuthProviderRegistry::instance().find(QStringLiteral("msa"));
         const bool interactive = action != Action::Refresh;
         const auto neededCapability =
@@ -47,6 +45,9 @@ AuthFlow::AuthFlow(AccountData* data, Action action) : Task(), m_data(data)
             m_steps.append(makeShared<EntitlementsStep>(m_data));
             m_steps.append(makeShared<MinecraftProfileStep>(m_data));
             m_steps.append(makeShared<GetSkinStep>(m_data));
+        } else {
+            // Do not treat a later drained step list as this failure mode.
+            m_msaProviderUnavailable = true;
         }
     }
     changeState(AccountTaskState::STATE_CREATED);
@@ -71,12 +72,12 @@ void AuthFlow::nextStep()
     }
     if (m_steps.size() == 0) {
         m_currentStep.reset();
-        if (m_requiresSteps) {
-            // MSA was expected to produce steps; missing/unsupported provider must not succeed.
+        if (m_msaProviderUnavailable) {
+            // MSA requested but no steps were ever queued (missing/unsupported provider).
             changeState(AccountTaskState::STATE_FAILED_HARD, tr("Microsoft authentication provider is unavailable."));
             return;
         }
-        // Offline (and other non-MSA) flows historically complete with no steps.
+        // Offline flows, or MSA after the last step emitted STATE_WORKING.
         succeed();
         return;
     }
