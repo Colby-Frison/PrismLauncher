@@ -41,6 +41,11 @@
  */
 
 #include "Application.h"
+#include "LaunchController.h"
+#include "LaunchCoordinator.h"
+#include "java/JavaInstallList.h"
+#include "services/JavaEnvironment.h"
+#include "services/LauncherWindows.h"
 #include "BuildConfig.h"
 
 #include "DataMigrationTask.h"
@@ -113,7 +118,10 @@
 #include "net/HttpMetaCache.h"
 
 #include "AccountCoordinator.h"
+#include "modplatform/flame/FlameAPI.h"
+#include "modplatform/modrinth/ModrinthAPI.h"
 #include "services/AccountListService.h"
+#include "services/IconListIconStore.h"
 #include "services/InstanceListCatalog.h"
 #include "services/SettingsObjectLauncherSettings.h"
 #include "services/SharedNetworkContext.h"
@@ -345,6 +353,34 @@ std::tuple<QDateTime, QString, QString, QString, QString> readLockFile(const QSt
     }
     return std::make_tuple(timestamp, from, to, target, dataPath);
 }
+}  // namespace
+
+namespace {
+
+class ApplicationWindows final : public LauncherWindows {
+   public:
+    explicit ApplicationWindows(Application* app) : m_app(app) {}
+
+    void showMainWindow() override { m_app->showMainWindow(); }
+    void showInstanceWindow(MinecraftInstance* instance, const QString& page) override { m_app->showInstanceWindow(instance, page); }
+    void showLogWindow() override { m_app->showLogWindow(); }
+    void showGlobalSettings(QWidget* parent, const QString& page) override { m_app->ShowGlobalSettings(parent, page); }
+
+   private:
+    Application* m_app;
+};
+
+class ApplicationJavaEnvironment final : public JavaEnvironment {
+   public:
+    explicit ApplicationJavaEnvironment(Application* app) : m_app(app) {}
+
+    QString javaPath() const override { return m_app->javaPath(); }
+    JavaInstallList* installs() override { return m_app->javalist(); }
+
+   private:
+    Application* m_app;
+};
+
 }  // namespace
 
 Application::Application(int& argc, char** argv) : QApplication(argc, argv)
@@ -971,12 +1007,13 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
             m_globalSettingsProvider->addPage<LanguagePage>();
             m_globalSettingsProvider->addPage<AppearancePage>();
             m_globalSettingsProvider->addPage<MinecraftPage>();
-            m_globalSettingsProvider->addPage<JavaPage>();
+            m_globalSettingsProvider->addPageCreator(
+                [this]() { return new JavaPage(m_javaEnvironment.get(), m_launcherSettings.get(), metadataIndex()); });
             // AccountListPage needs AccountCoordinator/AccountService, which are
             // wired later in this constructor; the creator runs when Settings opens.
             m_globalSettingsProvider->addPageCreator([this]() { return new AccountListPage(accountCoordinator(), accountService()); });
             m_globalSettingsProvider->addPage<APIPage>();
-            m_globalSettingsProvider->addPage<ExternalToolsPage>();
+            m_globalSettingsProvider->addPageCreator([this]() { return new ExternalToolsPage(m_launchCoordinator.get()); });
             m_globalSettingsProvider->addPage<ProxyPage>();
         }
 
@@ -1058,26 +1095,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
             }
         }
 
-        m_instances.reset(new InstanceList(m_settings.get(), allInstDirs, this));
-        connect(instDirSetting.get(), &Setting::SettingChanged, m_instances.get(), &InstanceList::on_InstFolderChanged);
-        connect(additionalInstanceDirsSetting.get(), &Setting::SettingChanged, m_instances.get(), &InstanceList::on_InstFolderChanged);
-        qInfo() << "Loading Instances...";
-        m_instances->loadList();
-        qInfo() << "<> Instances loaded.";
-    }
-
-    // and accounts
-    {
-        m_accounts.reset(new AccountList(this));
-        qInfo() << "Loading accounts...";
-        m_accounts->setListFilePath("accounts.json", true);
-        m_accounts->loadList();
-        m_accounts->fillQueue();
-        qInfo() << "<> Accounts loaded.";
-    }
-
-    // init the http meta cache
-    {
+        // Instances read these during load, and load starts a profile resolve, so they exist first.
         m_metacache.reset(new HttpMetaCache("metacache"));
         m_metacache->addBase("asset_indexes", QDir("assets/indexes").absolutePath());
         m_metacache->addBase("libraries", QDir("libraries").absolutePath());
@@ -1096,25 +1114,53 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         m_metacache->addBase("feed", QDir("cache/feed").absolutePath());
         m_metacache->Load();
         qInfo() << "<> Cache initialized.";
-    }
 
-    // Wire narrow service facades over Application-owned backing objects.
-    // Wrappers hold non-owning pointers; they must not outlive the members above.
-    // Existing settings()/network()/instances()/accounts() accessors stay unchanged.
-    {
         m_launcherSettings = std::make_unique<SettingsObjectLauncherSettings>(m_settings.get(), m_playtimeSettings.get());
         m_networkContext = std::make_unique<SharedNetworkContext>(m_network.get(), m_metacache.get(), m_settings.get());
+        m_iconStore = std::make_unique<IconListIconStore>(m_icons.get());
+        m_windows = std::make_unique<ApplicationWindows>(this);
+        m_javaEnvironment = std::make_unique<ApplicationJavaEnvironment>(this);
+        m_launchExtrasStore = std::unique_ptr<ILaunchExtrasStore>(new ApplicationLaunchExtrasStore(this));
+        m_runningInstanceCounter = std::unique_ptr<IRunningInstanceCounter>(new ApplicationRunningInstanceCounter(this));
+        // AccountCoordinator is wired after accounts load; setAccountCoordinator fills it in.
+        m_launchCoordinator = std::make_unique<LaunchCoordinator>(m_launchExtrasStore.get(), m_runningInstanceCounter.get(),
+                                                                  m_updateRunning, nullptr, m_windows.get(), &m_profilers);
+
+        m_instances.reset(new InstanceList(m_settings.get(), allInstDirs, instanceServices(), this));
+        connect(instDirSetting.get(), &Setting::SettingChanged, m_instances.get(), &InstanceList::on_InstFolderChanged);
+        connect(additionalInstanceDirsSetting.get(), &Setting::SettingChanged, m_instances.get(), &InstanceList::on_InstFolderChanged);
+        qInfo() << "Loading Instances...";
+        m_instances->loadList();
+        qInfo() << "<> Instances loaded.";
+    }
+
+    // Remaining facades. Settings, network, and icons were created before the instance list,
+    // because loadList() builds MinecraftInstance objects that keep those pointers.
+    {
+        m_oauthCallbacks = std::make_unique<OAuthCallbackRelay>();
+        connect(this, &Application::oauthReplyRecieved, m_oauthCallbacks.get(), &OAuthCallbackRelay::replyReceived);
         m_instanceCatalog = std::make_unique<InstanceListCatalog>(m_instances.get());
+        m_flameAPI = std::make_unique<FlameAPI>(m_networkContext.get());
+        m_modrinthAPI = std::make_unique<ModrinthAPI>(m_networkContext.get());
+        qInfo() << "<> Service interfaces wired.";
+    }
+
+    // and accounts; the refresh queue starts immediately, so the auth context must already be wired
+    {
+        m_accounts.reset(new AccountList(authContext(), this));
         m_accountService = std::make_unique<AccountListService>(m_accounts.get());
         m_accountCoordinator = std::make_unique<AccountCoordinator>(m_accountService.get());
         // Keep legacy Application::oauthReplyRecieved listeners working while UI
         // delivers callbacks through the coordinator.
         connect(m_accountCoordinator.get(), &AccountCoordinator::oauthReplyReceived, this, &Application::oauthReplyRecieved);
-        m_launchExtrasStore = std::unique_ptr<ILaunchExtrasStore>(new ApplicationLaunchExtrasStore(this));
-        m_runningInstanceCounter = std::unique_ptr<IRunningInstanceCounter>(new ApplicationRunningInstanceCounter(this));
-        m_launchCoordinator = std::make_unique<LaunchCoordinator>(m_launchExtrasStore.get(), m_runningInstanceCounter.get(),
-                                                                  m_updateRunning, m_accountCoordinator.get());
-        qInfo() << "<> Service interfaces wired.";
+        if (m_launchCoordinator) {
+            m_launchCoordinator->setAccountCoordinator(m_accountCoordinator.get());
+        }
+        qInfo() << "Loading accounts...";
+        m_accounts->setListFilePath("accounts.json", true);
+        m_accounts->loadList();
+        m_accounts->fillQueue();
+        qInfo() << "<> Accounts loaded.";
     }
 
     // load translations
@@ -1352,7 +1398,7 @@ bool Application::createSetupWizard()
         }
 
         if (javaRequired) {
-            m_setupWizard->addPage(new JavaWizardPage(m_setupWizard));
+            m_setupWizard->addPage(new JavaWizardPage(m_javaEnvironment.get(), metadataIndex(), m_setupWizard));
         } else if (askjava) {
             m_setupWizard->addPage(new AutoJavaWizardPage(m_setupWizard));
         }
@@ -1592,7 +1638,7 @@ TranslationsModel* Application::translations()
 JavaInstallList* Application::javalist()
 {
     if (!m_javalist) {
-        m_javalist.reset(new JavaInstallList());
+        m_javalist.reset(new JavaInstallList(m_javaEnvironment.get(), m_launcherSettings.get()));
     }
     return m_javalist.get();
 }
@@ -1745,8 +1791,9 @@ MainWindow* Application::showMainWindow(bool minimized)
         m_mainWindow->raise();
         m_mainWindow->activateWindow();
     } else {
-        m_mainWindow = new MainWindow(launcherSettings(), instanceCatalog(), accountService(), networkContext(), launchCoordinator(),
-                                      launchExtrasStore(), accountCoordinator());
+        m_mainWindow = new MainWindow(launcherSettings(), instanceCatalog(), accountService(), networkContext(), m_iconStore.get(),
+                                      launchCoordinator(), launchExtrasStore(), accountCoordinator(), m_windows.get(), metadataIndex(),
+                                      m_javaEnvironment.get());
         m_mainWindow->restoreState(QByteArray::fromBase64(APPLICATION->settings()->get("MainWindowState").toString().toUtf8()));
         m_mainWindow->restoreGeometry(QByteArray::fromBase64(APPLICATION->settings()->get("MainWindowGeometry").toString().toUtf8()));
 
@@ -1910,6 +1957,7 @@ Meta::Index* Application::metadataIndex()
     if (!m_metadataIndex) {
         m_metadataIndex.reset(new Meta::Index());
     }
+    m_metadataIndex->bind(m_launcherSettings.get(), m_networkContext.get());
     return m_metadataIndex.get();
 }
 
@@ -1932,15 +1980,16 @@ void Application::updateCapabilities()
         m_capabilities |= SupportsMangoHud;
     }
 #endif
+    m_runtime.supportsMangoHud = m_capabilities.testFlag(SupportsMangoHud);
 }
 
 void Application::detectLibraries()
 {
 #ifdef Q_OS_LINUX
-    m_detectedGLFWPath = LibraryUtils::find(BuildConfig.GLFW_LIBRARY_NAME);
-    m_detectedOpenALPath = LibraryUtils::find(BuildConfig.OPENAL_LIBRARY_NAME);
-    m_detectedSDLPath = LibraryUtils::find(BuildConfig.SDL_LIBRARY_NAME);
-    qDebug() << "Detected native libraries:" << m_detectedGLFWPath << m_detectedOpenALPath << m_detectedSDLPath;
+    m_runtime.detectedGLFWPath = LibraryUtils::find(BuildConfig.GLFW_LIBRARY_NAME);
+    m_runtime.detectedOpenALPath = LibraryUtils::find(BuildConfig.OPENAL_LIBRARY_NAME);
+    m_runtime.detectedSDLPath = LibraryUtils::find(BuildConfig.SDL_LIBRARY_NAME);
+    qDebug() << "Detected native libraries:" << m_runtime.detectedGLFWPath << m_runtime.detectedOpenALPath << m_runtime.detectedSDLPath;
 #endif
 }
 
@@ -1964,32 +2013,38 @@ QString Application::getJarPath(const QString& jarFile)
 
 QString Application::getMSAClientID()
 {
-    QString clientIDOverride = m_settings->get("MSAClientIDOverride").toString();
-    if (!clientIDOverride.isEmpty()) {
-        return clientIDOverride;
-    }
+    return authContext().msaClientId();
+}
 
-    return BuildConfig.MSA_CLIENT_ID;
+InstanceServices Application::instanceServices()
+{
+    return { .settings = m_launcherSettings.get(),
+             .network = m_networkContext.get(),
+             .icons = m_iconStore.get(),
+             .metadata = metadataIndex(),
+             .runtime = &m_runtime,
+             .launch = m_launchCoordinator.get(),
+             .windows = m_windows.get(),
+             .java = m_javaEnvironment.get() };
+}
+
+AuthContext Application::authContext() const
+{
+    return AuthContext{ .network = m_networkContext.get(),
+                        .settings = m_launcherSettings.get(),
+                        .oauthCallbacks = m_oauthCallbacks.get(),
+                        .portable = m_portable,
+                        .desktopFileName = desktopFileName() };
 }
 
 QString Application::getFlameAPIKey()
 {
-    QString keyOverride = m_settings->get("FlameKeyOverride").toString();
-    if (!keyOverride.isEmpty()) {
-        return keyOverride;
-    }
-
-    return BuildConfig.FLAME_API_KEY;
+    return m_networkContext->flameApiKey();
 }
 
 QString Application::getModrinthAPIToken()
 {
-    QString tokenOverride = m_settings->get("ModrinthToken").toString();
-    if (!tokenOverride.isEmpty()) {
-        return tokenOverride;
-    }
-
-    return {};
+    return m_networkContext->modrinthApiToken();
 }
 
 QString Application::getUserAgent()

@@ -7,7 +7,7 @@ This note covers the narrow service contracts introduced for R1 and the rules fo
 | Interface | Purpose | Current wrapper |
 | --- | --- | --- |
 | `LauncherSettings` | Global and playtime settings access | `SettingsObjectLauncherSettings` |
-| `NetworkContext` | Shared `QNetworkAccessManager`, `HttpMetaCache`, user-agent | `SharedNetworkContext` |
+| `NetworkContext` | Shared `QNetworkAccessManager`, `HttpMetaCache`, user-agent, CurseForge key, Modrinth token | `SharedNetworkContext` |
 | `InstanceCatalog` | Instance lookup and lifecycle operations | `InstanceListCatalog` |
 | `AccountService` | Account list, default account, refresh entry points | `AccountListService` |
 
@@ -58,10 +58,11 @@ Wrappers do not introduce a second service locator. Do not replace `APPLICATION`
 | Remaining use | Call sites | Owner |
 | --- | --- | --- |
 | `launchCoordinator()` / `LaunchUiHints` | Launch/Kill via injected `LaunchCoordinator*` + extras store; shared `handleLaunchOutcome` | R2.1 + R2.4 (#15, #18) |
-| `accountCoordinator()` | Injected into MainWindow / AccountListPage / LoginWizardPage; LaunchController via LaunchCoordinator; MSAStep still via `APPLICATION` (transitional) | R2.3 + R2.4 (#17, #18) |
+| `accountCoordinator()` | Injected into MainWindow / AccountListPage / LoginWizardPage; LaunchController via LaunchCoordinator | R2.3 + R2.4 (#17, #18) |
 | `CreateInstanceCoordinator` (MainWindow-owned; ManagedPackPage uses injected catalog/settings) | New/copy/import create path; ManagedPackPage updates | R2.2 + R2.4 (#16, #18) |
-| `ShowGlobalSettings()`, `globalSettingsApplied` | Settings and Manage Accounts actions, settings-closed refresh | Application shell (window orchestration) |
-| `showInstanceWindow()`, `showLogWindow()`, `closeCurrentWindow()`, `quit()` | Edit Instance, View Log, close and quit shortcuts; launch UX redirects | Application shell (window orchestration) |
+| `oauthReplyRecieved` / `OAuthCallbackRelay` | `processURLs()` OAuth callback URLs; MSAStep listens on the injected relay (AccountCoordinator still forwards to Application) | R1.4 + R2.3 (#17) |
+| `ShowGlobalSettings()` / `launcherWindows()` | Settings and Manage Accounts actions, settings-closed refresh | Application shell via `LauncherWindows` |
+| `showInstanceWindow()`, `showLogWindow()`, `closeCurrentWindow()`, `quit()` | Edit Instance, View Log, close and quit shortcuts; launch UX redirects | Application shell via `LauncherWindows` |
 | `updaterEnabled()`, `updatesAreAllowed()`, `updater()`, `triggerUpdateCheck()` | update menu visibility and Check for Updates | Application shell |
 | `themeManager()`, `currentCatChanged` signal | theme menu, theme/cat-pack folder actions, cat background | UI layer; stays with the app target (R7.3, #35) |
 | `icons()` | instance icon toolbar, icon-updated signal, icons folder | R1 follow-up (#1): needs an icon repository contract |
@@ -78,12 +79,51 @@ MainWindow / InstanceWindow / pages
 Application (composition root)
   owns coordinators and service wrappers; thin launch/kill facades for non-MainWindow callers
 MSAStep
-  listens to AccountCoordinator::oauthReplyReceived (not Application::oauthReplyRecieved)
+  listens to AuthContext::OAuthCallbackRelay (AccountCoordinator still forwards OAuth to Application)
 ```
 
 ## Out of scope for R1.1 / R1.2
 
 - Rewriting `APPLICATION->…` call sites (R1.3+)
 - Extracting `AuthFlow` construction into `AccountService`
-- Moving API keys / capability flags onto `NetworkContext`
+- Moving API keys / capability flags onto `NetworkContext` (API keys done in R1.3)
 - Splitting CMake targets by layer (R7)
+
+## Flame / Modrinth migration (R1.3)
+
+- `NetworkContext` exposes `flameApiKey()` and `modrinthApiToken()`. `SharedNetworkContext` owns the lookup (user override, else build-time key); `Application::getFlameAPIKey()` / `getModrinthAPIToken()` delegate to it.
+- `ResourceAPI`, `FlameAPI`, and `ModrinthAPI` take a `NetworkContext*` in their constructor. The `FlameAPI::get()` / `ModrinthAPI::get()` singletons are gone, and the former static network calls (`getFiles`, `matchFingerprints`, `currentVersions`, changelog/description, …) are instance methods.
+- `Net::ApiHeaderProxy` reads credentials from the `NetworkContext` it is given. `Net::ApiRequest` has overloads that take a `NetworkContext*`; provider code uses those. The legacy overloads (`Request::Option::AddAPIHeaders`) still resolve the context from `Application` inside `net/Request.cpp`.
+- Flame/Modrinth tasks receive dependencies through their constructors: `FlameCheckUpdate`, `ModrinthCheckUpdate`, `Flame::FileResolvingTask`, `EnsureMetadataTask`, `FlamePackExportTask`, `ModrinthPackExportTask`, `FlameCreationTask`, `ModrinthCreationTask`, plus `FTB::PackInstallTask` and `GetModDependenciesTask` because they build Flame/Modrinth clients. Tasks hold their API client as a member, not a local, because `ResourceAPI` callbacks capture `this`.
+- `Application` owns one `FlameAPI` and one `ModrinthAPI` (`flameAPI()` / `modrinthAPI()`) for UI pages that keep a long-lived `const ResourceAPI*`. UI and `InstanceImportTask` remain the edge that reads `APPLICATION->networkContext()` / `launcherSettings()`.
+- Result: lines using `APPLICATION` under `launcher/modplatform/` went from 42 to 15, and files including `Application.h` there went from 14 to 5. No Flame/Modrinth code reads network, API keys, or settings through `APPLICATION`. The three remaining Flame/Modrinth uses are `instances()` and `metadataIndex()` (instance and metadata domain, not network/settings). The rest are in ATLauncher, Technic, and legacy FTB.
+- `tests/ModPlatformInjection_test.cpp` checks header injection and job creation with a fake `NetworkContext` and no `Application`.
+
+## Auth step migration (R1.4)
+
+- `AuthContext` (`minecraft/auth/AuthContext.h`) bundles the auth pipeline's dependencies: `NetworkContext*`, `LauncherSettings*` (for `MSAClientIDOverride`), an `OAuthCallbackRelay*` for custom-scheme OAuth redirects, the portable flag, and the desktop file name. `msaClientId()` resolves the override, else the build-time ID; `Application::getMSAClientID()` delegates to it.
+- `Application::authContext()` builds the context from its own services. `OAuthCallbackRelay` is owned by `Application` and forwards `oauthReplyRecieved`, so `MainWindow` still emits the same signal.
+- `AuthStep` takes a `NetworkContext*`; every step builds its `NetJob` (or the OAuth flow's network manager) on it. `MSAStep` takes the whole `AuthContext`; `MSADeviceCodeStep` takes the network and an already-resolved client ID. With no relay, `MSAStep` uses the loopback HTTP redirect.
+- `AuthFlow`, `MinecraftAccount::login()` / `refresh()`, and `AccountList` take an `AuthContext`. `Application` now builds `AccountList` (and `AccountListService`) after the service wrappers, because `fillQueue()` starts a refresh immediately. UI dialogs and `LaunchController` pass `APPLICATION->authContext()`.
+- `Net::Request` falls back to the build-time user agent and the default transfer timeout when there is no `Application`, so requests run in plain `QCoreApplication` tests.
+- `Net::Request` again records `Succeeded` on a successful download. The `std::expected` sink refactor (`bb27d2e13`) had dropped that, so `wasSuccessful()` was false for good responses and the MSA device-code step rejected them. The device-code test covers this.
+- Result: `launcher/minecraft/auth/` has no `APPLICATION` uses or `Application.h` includes (previously 14 lines across 9 files).
+- `tests/AuthSteps_test.cpp` runs the offline flow, the client-ID-changed refresh path, `XboxUserStep`, and `MSADeviceCodeStep` against a fake `NetworkContext` whose network manager returns canned replies.
+
+## Instance / profile migration (R1.5)
+
+- `InstanceServices` bundles what an instance needs to load and launch: `LauncherSettings*`, `NetworkContext*`, `IconStore*`, `Meta::Index*`, and `const LauncherRuntimeInfo*` (detected OpenAL/GLFW/SDL paths and MangoHud). Pointers are non-owning. A null pointer means that service is absent, which is how headless tests construct an instance.
+- `Application::instanceServices()` builds the bundle. The meta cache, settings wrapper, network wrapper, and icon store are created before `InstanceList::loadList()`, because loading an instance copies the pointers. `LauncherRuntimeInfo` is updated in place by `detectLibraries()` and `updateCapabilities()`, so instances see the detected libraries at launch time.
+- `InstanceList` and `InstanceTask` carry the bundle. Every `MinecraftInstance` constructor takes it: instance load, vanilla creation, and the Flame, Modrinth, FTB, legacy FTB, import FTB, ATLauncher, and Technic install tasks.
+- `MinecraftInstance` uses it for native-library arguments, the libraries directory, game-time formatting, mod-metadata indexing, the launch icon, and MangoHud. `PackProfile` no longer includes `Application.h`; components and `ComponentUpdateTask` read the metadata index from the instance. Library, asset, and legacy FML update tasks build their `NetJob`s on the injected network and read URL overrides from the injected settings.
+- `populateLaunchMenu` calls the injected `LaunchCoordinator` for launch and the profiler list. Java download and window show/hide go through `JavaEnvironment` and `LauncherWindows` (see below). Account claim stays on `Application`.
+- `tests/InstanceServices_test.cpp` checks the injected OpenAL path, the asset URL override, and that a service-less instance still builds arguments.
+
+## Remaining workflow migration (R1)
+
+- `LaunchCoordinator` owns launch and kill. `Application::launch()` / `kill()` delegate to it. Menus, the main window, the instance window, and world/server pages call the coordinator on `InstanceServices`.
+- `LauncherWindows` is the window contract (main window, instance window, log window, global settings). `Application` implements it. Launch steps and settings buttons use the pointer instead of `APPLICATION`.
+- `JavaEnvironment` exposes the managed Java directory and the detected-install list. Java pages, the setup wizard, and `AutoInstallJava` take it. `JavaInstallList` no longer asks `APPLICATION` for the directory or the task concurrency setting.
+- `IconStore::list()` returns the `IconList` the UI already uses as a model. Icon pickers, the instance toolbar, and shortcut creation go through that pointer.
+- Metadata download uses `MetaServices` (settings + network) stored on `Meta::Index` and copied onto version lists and versions. `Application::metadataIndex()` binds it. Version lists load the index they belong to instead of `APPLICATION->metadataIndex()`.
+- Updater, themes, translations, and startup stay on `Application`.

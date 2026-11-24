@@ -157,6 +157,8 @@ set(LAUNCH_SOURCES
     launch/steps/PrintServers.h
     launch/LaunchStep.cpp
     launch/LaunchStep.h
+    launch/LaunchPipelineBuilder.cpp
+    launch/LaunchPipelineBuilder.h
     launch/LaunchTask.cpp
     launch/LaunchTask.h
     launch/LogModel.cpp
@@ -218,6 +220,8 @@ set(MINECRAFT_SOURCES
     minecraft/auth/Parsers.cpp
     minecraft/auth/Parsers.h
 
+    minecraft/auth/AuthContext.cpp
+    minecraft/auth/AuthContext.h
     minecraft/auth/AuthFlow.cpp
     minecraft/auth/AuthFlow.h
 
@@ -275,6 +279,7 @@ set(MINECRAFT_SOURCES
     minecraft/launch/AutoInstallJava.h
 
     minecraft/GradleSpecifier.h
+    minecraft/InstanceServices.h
     minecraft/MinecraftInstance.cpp
     minecraft/MinecraftInstance.h
     minecraft/LaunchProfile.cpp
@@ -425,6 +430,10 @@ set(SERVICE_SOURCES
     services/AccountService.h
     services/AccountListService.h
     services/AccountListService.cpp
+    services/IconStore.h
+    services/IconListIconStore.h
+    services/LauncherWindows.h
+    services/JavaEnvironment.h
 )
 
 set(JAVA_SOURCES
@@ -497,6 +506,10 @@ set(API_SOURCES
 
     modplatform/ResourceAPI.h
     modplatform/ResourceAPI.cpp
+
+    modplatform/ModPlatformProvider.h
+    modplatform/ModPlatformRegistry.h
+    modplatform/ModPlatformRegistry.cpp
 
     modplatform/EnsureMetadataTask.h
     modplatform/EnsureMetadataTask.cpp

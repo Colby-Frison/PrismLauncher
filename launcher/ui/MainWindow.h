@@ -73,10 +73,17 @@ class IInstanceTaskRunner;
 class LaunchCoordinator;
 class ILaunchExtrasStore;
 class AccountCoordinator;
+class IconStore;
+class JavaEnvironment;
+class LauncherWindows;
 
 namespace Ui {
 class MainWindow;
 }
+namespace Meta {
+class Index;
+}
+
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
@@ -85,9 +92,13 @@ class MainWindow : public QMainWindow {
                InstanceCatalog* instances,
                AccountService* accounts,
                NetworkContext* network,
+               IconStore* icons,
                LaunchCoordinator* launches,
                ILaunchExtrasStore* launchExtras,
                AccountCoordinator* accountCoordinator,
+               LauncherWindows* windows,
+               Meta::Index* metadata,
+               JavaEnvironment* java,
                QWidget* parent = nullptr);
     ~MainWindow();
 
@@ -261,9 +272,13 @@ class MainWindow : public QMainWindow {
     InstanceCatalog* m_instances;
     AccountService* m_accounts;
     NetworkContext* m_network;
+    IconStore* m_icons = nullptr;
     LaunchCoordinator* m_launchCoordinator = nullptr;
     ILaunchExtrasStore* m_launchExtras = nullptr;
     AccountCoordinator* m_accountCoordinator = nullptr;
+    LauncherWindows* m_windows = nullptr;
+    Meta::Index* m_metadata = nullptr;
+    JavaEnvironment* m_java = nullptr;
 
     std::unique_ptr<IInstanceTaskRunner> m_instanceTaskRunner;
     std::unique_ptr<CreateInstanceCoordinator> m_createInstances;

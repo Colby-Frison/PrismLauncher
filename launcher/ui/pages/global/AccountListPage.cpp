@@ -162,7 +162,7 @@ void AccountListPage::on_actionAddOffline_triggered()
     }
 
     if (const MinecraftAccountPtr account = MinecraftAccount::createOffline(dialog.getUsername())) {
-        account->login()->start();  // The task will complete here.
+        account->login(APPLICATION->authContext())->start();  // The task will complete here.
         const auto outcome = m_accountCoordinator->addOfflineAccount(account);
         if (outcome == AccountCoordinator::AddOutcome::RejectedMissingMicrosoftAccount) {
             QMessageBox::warning(this, tr("Error"),

@@ -20,11 +20,22 @@
 
 #include <QMetaObject>
 
+#include "LaunchUiHints.h"
+#include "services/LauncherWindows.h"
+#include "tasks/Task.h"
+
 LaunchCoordinator::LaunchCoordinator(ILaunchExtrasStore* extras,
                                      IRunningInstanceCounter* running,
                                      bool updateRunning,
-                                     AccountCoordinator* accounts)
-    : m_extras(extras), m_running(running), m_accounts(accounts), m_updateRunning(updateRunning)
+                                     AccountCoordinator* accounts,
+                                     LauncherWindows* windows,
+                                     const QMap<QString, std::shared_ptr<BaseProfilerFactory>>* profilers)
+    : m_extras(extras)
+    , m_running(running)
+    , m_accounts(accounts)
+    , m_windows(windows)
+    , m_profilers(profilers)
+    , m_updateRunning(updateRunning)
 {
 }
 
@@ -81,4 +92,48 @@ bool LaunchCoordinator::requestKill(BaseInstance* instance)
 void LaunchCoordinator::setUpdateRunning(bool running)
 {
     m_updateRunning = running;
+}
+
+void LaunchCoordinator::setAccountCoordinator(AccountCoordinator* accounts)
+{
+    m_accounts = accounts;
+}
+
+bool LaunchCoordinator::launch(MinecraftInstance* instance,
+                               LaunchMode mode,
+                               MinecraftTarget::Ptr targetToJoin,
+                               MinecraftAccountPtr accountToUse,
+                               const QString& offlineName)
+{
+    if (!instance) {
+        return false;
+    }
+
+    LaunchRequest request;
+    request.instance = instance;
+    request.mode = mode;
+    request.targetToJoin = std::move(targetToJoin);
+    request.accountToUse = std::move(accountToUse);
+    request.offlineName = offlineName;
+    if (m_profilers) {
+        request.profiler = m_profilers->value(instance->settings()->get("Profiler").toString(), nullptr).get();
+    }
+
+    const auto outcome = requestLaunch(request);
+    return LaunchUiHints::handleLaunchOutcome(outcome, [this, instance](const LaunchUiHints::InstanceWindowHint& hint) {
+        if (m_windows) {
+            m_windows->showInstanceWindow(instance, hint.page);
+        }
+    });
+}
+
+bool LaunchCoordinator::kill(BaseInstance* instance)
+{
+    return LaunchUiHints::killInstance(this, m_extras, instance);
+}
+
+const QMap<QString, std::shared_ptr<BaseProfilerFactory>>& LaunchCoordinator::profilers() const
+{
+    static const QMap<QString, std::shared_ptr<BaseProfilerFactory>> empty;
+    return m_profilers ? *m_profilers : empty;
 }

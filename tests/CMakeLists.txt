@@ -39,6 +39,15 @@ ecm_add_test(ParseUtils_test.cpp LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_MA
 ecm_add_test(Task_test.cpp LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_MAJOR}::Test
     TEST_NAME Task)
 
+ecm_add_test(ModPlatformInjection_test.cpp LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_MAJOR}::Test Qt${QT_VERSION_MAJOR}::Network
+    TEST_NAME ModPlatformInjection)
+
+ecm_add_test(AuthSteps_test.cpp AuthSteps_test.h LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_MAJOR}::Test Qt${QT_VERSION_MAJOR}::Network
+    TEST_NAME AuthSteps)
+
+ecm_add_test(InstanceServices_test.cpp InstanceServices_test.h LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_MAJOR}::Test
+    TEST_NAME InstanceServices)
+
 ecm_add_test(INIFile_test.cpp LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_MAJOR}::Test
     TEST_NAME INIFile)
 
@@ -47,6 +56,9 @@ ecm_add_test(JavaVersion_test.cpp LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_M
 
 ecm_add_test(Packwiz_test.cpp LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_MAJOR}::Test
     TEST_NAME Packwiz)
+
+ecm_add_test(ModPlatformRegistry_test.cpp LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_MAJOR}::Test
+    TEST_NAME ModPlatformRegistry)
 
 ecm_add_test(Index_test.cpp LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_MAJOR}::Test
     TEST_NAME Index)
@@ -78,3 +90,6 @@ ecm_add_test(CreateInstanceCoordinator_test.cpp LINK_LIBRARIES Launcher_logic Qt
 
 ecm_add_test(AccountCoordinator_test.cpp LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_MAJOR}::Test
     TEST_NAME AccountCoordinator)
+
+ecm_add_test(LaunchPipelineBuilder_test.cpp LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_MAJOR}::Test
+    TEST_NAME LaunchPipelineBuilder)

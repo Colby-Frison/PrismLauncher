@@ -49,6 +49,7 @@
 
 #include "QObjectPtr.h"
 
+#include "minecraft/InstanceServices.h"
 #include "minecraft/auth/MinecraftAccount.h"
 
 class LaunchController;
@@ -91,6 +92,9 @@ class NetworkContext;
 class InstanceCatalog;
 class AccountService;
 class AccountCoordinator;
+class FlameAPI;
+class ModrinthAPI;
+class IconStore;
 
 namespace Meta {
 class Index;
@@ -107,8 +111,12 @@ class Index;
 #endif
 #define APPLICATION_DYN (dynamic_cast<Application*>(QCoreApplication::instance()))
 
+class JavaEnvironment;
+class LauncherWindows;
+
 class Application : public QApplication {
     Q_OBJECT
+
    public:
     enum Status : std::uint8_t { StartingUp, Failed, Succeeded, Initialized };
 
@@ -181,6 +189,20 @@ class Application : public QApplication {
 
     /** Narrow network contract for injection; Application owns the wrapper. */
     NetworkContext* networkContext() const { return m_networkContext.get(); }
+
+    /** Provider API clients bound to networkContext(); Application owns them for UI call sites. */
+    FlameAPI* flameAPI() const { return m_flameAPI.get(); }
+    ModrinthAPI* modrinthAPI() const { return m_modrinthAPI.get(); }
+
+    /** Dependencies for MinecraftAccount::login()/refresh(), bound to the services above. */
+    AuthContext authContext() const;
+
+    /** Dependencies for MinecraftInstance load and launch. */
+    InstanceServices instanceServices();
+    const LauncherRuntimeInfo& runtime() const { return m_runtime; }
+
+    LauncherWindows* launcherWindows() const { return m_windows.get(); }
+    JavaEnvironment* javaEnvironment() const { return m_javaEnvironment.get(); }
 
     Meta::Index* metadataIndex();
 
@@ -301,16 +323,24 @@ class Application : public QApplication {
     // concrete members above so they are destroyed first on shutdown.
     std::unique_ptr<LauncherSettings> m_launcherSettings;
     std::unique_ptr<NetworkContext> m_networkContext;
+    std::unique_ptr<IconStore> m_iconStore;
+    std::unique_ptr<OAuthCallbackRelay> m_oauthCallbacks;
     std::unique_ptr<InstanceCatalog> m_instanceCatalog;
     std::unique_ptr<AccountService> m_accountService;
     std::unique_ptr<AccountCoordinator> m_accountCoordinator;
 
-    // Launch orchestration (R2.1). Adapters access InstanceXtras; coordinator after them.
+    // Launch orchestration (R2). Adapters access InstanceXtras; coordinator after them.
     friend class ApplicationLaunchExtrasStore;
     friend class ApplicationRunningInstanceCounter;
     std::unique_ptr<ILaunchExtrasStore> m_launchExtrasStore;
     std::unique_ptr<IRunningInstanceCounter> m_runningInstanceCounter;
+    std::unique_ptr<LauncherWindows> m_windows;
+    std::unique_ptr<JavaEnvironment> m_javaEnvironment;
     std::unique_ptr<LaunchCoordinator> m_launchCoordinator;
+
+    // Hold a non-owning NetworkContext*; declared after m_networkContext so they are destroyed first.
+    std::unique_ptr<FlameAPI> m_flameAPI;
+    std::unique_ptr<ModrinthAPI> m_modrinthAPI;
 
     QMap<QString, std::shared_ptr<BaseProfilerFactory>> m_profilers;
 
@@ -319,6 +349,7 @@ class Application : public QApplication {
     Status m_status = Application::StartingUp;
     Capabilities m_capabilities;
     bool m_portable = false;
+    LauncherRuntimeInfo m_runtime;
 
 #ifdef Q_OS_MACOS
     Qt::ApplicationState m_prevAppState = Qt::ApplicationInactive;
@@ -349,9 +380,6 @@ class Application : public QApplication {
     SetupWizard* m_setupWizard = nullptr;
 
    public:
-    QString m_detectedGLFWPath;
-    QString m_detectedOpenALPath;
-    QString m_detectedSDLPath;
     QString m_instanceIdToLaunch;
     QString m_serverToJoin;
     QString m_worldToJoin;

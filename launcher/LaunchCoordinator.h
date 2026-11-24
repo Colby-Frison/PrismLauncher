@@ -20,12 +20,14 @@
 
 #include <memory>
 
+#include <QMap>
 #include <QObject>
 #include <QString>
 
 class QWidget;
 
 class AccountCoordinator;
+class LauncherWindows;
 
 #include "BaseInstance.h"
 #include "LaunchController.h"
@@ -62,6 +64,10 @@ class IRunningInstanceCounter {
 /**
  * Owns launch orchestration without UI: decide whether to start a LaunchController,
  * configure and store it, track running, and abort on kill.
+ *
+ * bool launch()/kill() and profilers() are thin compatibility wrappers for
+ * InstanceServices / ExternalToolsPage call sites that still expect the R1 API.
+ * UI redirects for those paths go through an optional LauncherWindows*.
  */
 class LaunchCoordinator : public QObject {
     Q_OBJECT
@@ -87,15 +93,29 @@ class LaunchCoordinator : public QObject {
     explicit LaunchCoordinator(ILaunchExtrasStore* extras,
                                IRunningInstanceCounter* running,
                                bool updateRunning,
-                               AccountCoordinator* accounts = nullptr);
+                               AccountCoordinator* accounts = nullptr,
+                               LauncherWindows* windows = nullptr,
+                               const QMap<QString, std::shared_ptr<BaseProfilerFactory>>* profilers = nullptr);
 
     LaunchOutcome requestLaunch(const LaunchRequest& request);
     bool requestKill(BaseInstance* instance);
     void setUpdateRunning(bool running);
+    void setAccountCoordinator(AccountCoordinator* accounts);
+
+    /** R1-compatible facade used by InstanceServices / ExternalToolsPage. */
+    bool launch(MinecraftInstance* instance,
+                LaunchMode mode = LaunchMode::Normal,
+                MinecraftTarget::Ptr targetToJoin = nullptr,
+                MinecraftAccountPtr accountToUse = nullptr,
+                const QString& offlineName = QString());
+    bool kill(BaseInstance* instance);
+    const QMap<QString, std::shared_ptr<BaseProfilerFactory>>& profilers() const;
 
    private:
     ILaunchExtrasStore* m_extras = nullptr;
     IRunningInstanceCounter* m_running = nullptr;
     AccountCoordinator* m_accounts = nullptr;
+    LauncherWindows* m_windows = nullptr;
+    const QMap<QString, std::shared_ptr<BaseProfilerFactory>>* m_profilers = nullptr;
     bool m_updateRunning = false;
 };

@@ -36,6 +36,7 @@
  */
 
 #include "MinecraftSettingsWidget.h"
+#include "services/LauncherWindows.h"
 #include "modplatform/ModIndex.h"
 #include "ui_MinecraftSettingsWidget.h"
 
@@ -214,21 +215,21 @@ void MinecraftSettingsWidget::loadSettings()
     m_ui->useNativeGLFWCheck->setChecked(settings->get("UseNativeGLFW").toBool());
     m_ui->lineEditGLFWPath->setText(settings->get("CustomGLFWPath").toString().trimmed());
 #ifdef Q_OS_LINUX
-    m_ui->lineEditGLFWPath->setPlaceholderText(APPLICATION->m_detectedGLFWPath);
+    m_ui->lineEditGLFWPath->setPlaceholderText(APPLICATION->runtime().detectedGLFWPath);
 #else
     m_ui->lineEditGLFWPath->setPlaceholderText(tr("Path to %1 library file").arg(BuildConfig.GLFW_LIBRARY_NAME));
 #endif
     m_ui->useNativeOpenALCheck->setChecked(settings->get("UseNativeOpenAL").toBool());
     m_ui->lineEditOpenALPath->setText(settings->get("CustomOpenALPath").toString().trimmed());
 #ifdef Q_OS_LINUX
-    m_ui->lineEditOpenALPath->setPlaceholderText(APPLICATION->m_detectedOpenALPath);
+    m_ui->lineEditOpenALPath->setPlaceholderText(APPLICATION->runtime().detectedOpenALPath);
 #else
     m_ui->lineEditOpenALPath->setPlaceholderText(tr("Path to %1 library file").arg(BuildConfig.OPENAL_LIBRARY_NAME));
 #endif
     m_ui->useNativeSDLCheck->setChecked(settings->get("UseNativeSDL").toBool());
     m_ui->lineEditSDLPath->setText(settings->get("CustomSDLPath").toString().trimmed());
 #ifdef Q_OS_LINUX
-    m_ui->lineEditSDLPath->setPlaceholderText(APPLICATION->m_detectedSDLPath);
+    m_ui->lineEditSDLPath->setPlaceholderText(APPLICATION->runtime().detectedSDLPath);
 #else
     m_ui->lineEditSDLPath->setPlaceholderText(tr("Path to %1 library file").arg(BuildConfig.SDL_LIBRARY_NAME));
 #endif
@@ -527,10 +528,15 @@ void MinecraftSettingsWidget::openGlobalSettings()
 
     qDebug() << id;
 
-    if (id == "javaPage")
-        APPLICATION->ShowGlobalSettings(this, "java-settings");
-    else  // TODO select tab
-        APPLICATION->ShowGlobalSettings(this, "minecraft-settings");
+    if (id == "javaPage") {
+        if (m_instance->services().windows != nullptr) {
+            m_instance->services().windows->showGlobalSettings(this, "java-settings");
+        }
+    } else {  // TODO select tab
+        if (m_instance->services().windows != nullptr) {
+            m_instance->services().windows->showGlobalSettings(this, "minecraft-settings");
+        }
+    }
 }
 
 void MinecraftSettingsWidget::updateAccountsMenu(SettingsObject& settings)

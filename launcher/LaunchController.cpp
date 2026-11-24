@@ -36,6 +36,7 @@
 
 #include "LaunchController.h"
 #include "AccountCoordinator.h"
+#include "services/LauncherWindows.h"
 #include "Application.h"
 #include "launch/steps/PrintServers.h"
 #include "minecraft/auth/AccountData.h"
@@ -105,7 +106,9 @@ void LaunchController::decideAccount()
 
         if (reply == QMessageBox::Yes) {
             // Open the account manager.
-            APPLICATION->ShowGlobalSettings(m_parentWidget, "accounts");
+            if (m_instance->services().windows != nullptr) {
+                m_instance->services().windows->showGlobalSettings(m_parentWidget, "accounts");
+            }
         } else if (reply == QMessageBox::No) {
             // Do not open "profile select" dialog.
             return;
@@ -161,7 +164,7 @@ LaunchDecision LaunchController::decideLaunchMode()
     const bool needsRefresh =
         m_wantedLaunchMode == LaunchMode::Normal && (state == AccountState::Offline || accountToCheck->shouldRefresh());
     if (state == AccountState::Unchecked || state == AccountState::Errored || needsRefresh) {
-        accountToCheck->refresh();
+        accountToCheck->refresh(APPLICATION->authContext());
         state = AccountState::Working;
     }
 
@@ -382,7 +385,9 @@ void LaunchController::launchInstance()
     const auto* console = qobject_cast<InstanceWindow*>(m_parentWidget);
     const auto showConsole = m_instance->settings()->get("ShowConsole").toBool();
     if (!console && showConsole) {
-        APPLICATION->showInstanceWindow(m_instance);
+        if (m_instance->services().windows != nullptr) {
+            m_instance->services().windows->showInstanceWindow(m_instance);
+        }
     }
     connect(m_launcher, &LaunchTask::readyForLaunch, this, &LaunchController::readyForLaunch);
     connect(m_launcher, &LaunchTask::succeeded, this, &LaunchController::onSucceeded);
@@ -469,7 +474,9 @@ void LaunchController::onSucceeded()
 void LaunchController::onFailed(QString reason)
 {
     if (m_instance->settings()->get("ShowConsoleOnError").toBool()) {
-        APPLICATION->showInstanceWindow(m_instance, "console");
+        if (m_instance->services().windows != nullptr) {
+            m_instance->services().windows->showInstanceWindow(m_instance, "console");
+        }
     }
     emitFailed(std::move(reason));
 }
