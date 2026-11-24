@@ -49,6 +49,7 @@
 #include "ui/dialogs/MSALoginDialog.h"
 
 #include "Application.h"
+#include "minecraft/auth/AuthProviderRegistry.h"
 
 AccountListPage::AccountListPage(QWidget* parent) : QMainWindow(parent), ui(new Ui::AccountListPage)
 {
@@ -83,10 +84,16 @@ AccountListPage::AccountListPage(QWidget* parent) : QMainWindow(parent), ui(new 
 
     updateButtonStates();
 
-    // Xbox authentication won't work without a client identifier, so disable the button if it is missing
-    if (~APPLICATION->capabilities() & Application::SupportsMSA) {
+    // Resolve account-creation options through the auth registry (R3.4).
+    const auto* msa = Auth::AuthProviderRegistry::instance().find(QStringLiteral("msa"));
+    if (!msa || !msa->available() || !msa->hasCapability(Auth::AuthCapability::AccountCreationUI)) {
         ui->actionAddMicrosoft->setVisible(false);
         ui->actionAddMicrosoft->setToolTip(tr("No Microsoft Authentication client ID was set."));
+    }
+
+    const auto* offline = Auth::AuthProviderRegistry::instance().find(QStringLiteral("offline"));
+    if (!offline || !offline->available() || !offline->hasCapability(Auth::AuthCapability::AccountCreationUI)) {
+        ui->actionAddOffline->setVisible(false);
     }
 }
 
@@ -129,6 +136,11 @@ void AccountListPage::listChanged()
 
 void AccountListPage::on_actionAddMicrosoft_triggered()
 {
+    const auto* msa = Auth::AuthProviderRegistry::instance().find(QStringLiteral("msa"));
+    if (!msa || !msa->available() || !msa->hasCapability(Auth::AuthCapability::InteractiveLogin)) {
+        return;
+    }
+
     auto account = MSALoginDialog::newAccount(this);
     if (account) {
         m_accounts->addAccount(account);
@@ -140,6 +152,11 @@ void AccountListPage::on_actionAddMicrosoft_triggered()
 
 void AccountListPage::on_actionAddOffline_triggered()
 {
+    const auto* offline = Auth::AuthProviderRegistry::instance().find(QStringLiteral("offline"));
+    if (!offline || !offline->available() || !offline->hasCapability(Auth::AuthCapability::OfflineSession)) {
+        return;
+    }
+
     if (!m_accounts->anyAccountIsValid()) {
         QMessageBox::warning(this, tr("Error"),
                              tr("You must add a Microsoft account that owns Minecraft before you can add an offline account."

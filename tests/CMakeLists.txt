@@ -60,6 +60,36 @@ ecm_add_test(Packwiz_test.cpp LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_MAJOR
 ecm_add_test(ModPlatformRegistry_test.cpp LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_MAJOR}::Test
     TEST_NAME ModPlatformRegistry)
 
+# --- R3 capability-based provider registries (issue 3) ---
+# From r3-unit-tests: gated on production headers.
+set(PRISM_R3_MODPLATFORM_REGISTRY_H "${CMAKE_SOURCE_DIR}/launcher/modplatform/ModPlatformRegistry.h")
+set(PRISM_R3_AUTH_REGISTRY_H "${CMAKE_SOURCE_DIR}/launcher/minecraft/auth/AuthProviderRegistry.h")
+
+if(EXISTS "${PRISM_R3_MODPLATFORM_REGISTRY_H}")
+    ecm_add_test(ProviderRegistry_test.cpp LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_MAJOR}::Test
+        TEST_NAME ProviderRegistry)
+
+    ecm_add_test(R3RegistryIntegration_test.cpp LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_MAJOR}::Test
+        TEST_NAME R3RegistryIntegration)
+    target_include_directories(R3RegistryIntegration PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+else()
+    message(STATUS "R3: ModPlatformRegistry.h not found — skipping ProviderRegistry/R3RegistryIntegration tests")
+endif()
+
+if(EXISTS "${PRISM_R3_AUTH_REGISTRY_H}")
+    ecm_add_test(AuthProviderRegistry_test.cpp LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_MAJOR}::Test
+        TEST_NAME AuthProviderRegistry)
+    target_include_directories(AuthProviderRegistry PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+
+    ecm_add_test(AuthFlowProvider_test.cpp LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_MAJOR}::Test
+        TEST_NAME AuthFlowProvider)
+endif()
+
+if(EXISTS "${PRISM_R3_MODPLATFORM_REGISTRY_H}" AND EXISTS "${PRISM_R3_AUTH_REGISTRY_H}")
+    ecm_add_test(R3BuiltinRegistration_test.cpp LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_MAJOR}::Test
+        TEST_NAME R3BuiltinRegistration)
+endif()
+
 ecm_add_test(Index_test.cpp LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_MAJOR}::Test
     TEST_NAME Index)
 

@@ -488,7 +488,7 @@ void FlameCreationTask::createInstance()
         const uint64_t max = sysMiB * 0.9;
 
         if (static_cast<uint64_t>(recommendedRAM) > max) {
-            logWarning(tr("The recommended memory of the modpack exceeds 90% of your system RAM—reducing it from %1 MiB to %2 MiB!")
+            logWarning(tr("The recommended memory of the modpack exceeds 90% of your system RAM - reducing it from %1 MiB to %2 MiB!")
                            .arg(recommendedRAM)
                            .arg(max));
             recommendedRAM = max;

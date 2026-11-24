@@ -1,5 +1,6 @@
 #include "LoginWizardPage.h"
 #include "minecraft/auth/AccountList.h"
+#include "minecraft/auth/AuthProviderRegistry.h"
 #include "ui/dialogs/MSALoginDialog.h"
 #include "ui_LoginWizardPage.h"
 
@@ -29,6 +30,11 @@ void LoginWizardPage::retranslate()
 
 void LoginWizardPage::on_pushButton_clicked()
 {
+    const auto* msa = Auth::AuthProviderRegistry::instance().find(QStringLiteral("msa"));
+    if (!msa || !msa->available() || !msa->hasCapability(Auth::AuthCapability::InteractiveLogin)) {
+        return;
+    }
+
     wizard()->hide();
     auto account = MSALoginDialog::newAccount(nullptr);
     wizard()->show();

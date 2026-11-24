@@ -10,6 +10,8 @@
 #include "minecraft/auth/AuthStep.h"
 #include "tasks/Task.h"
 
+class AuthFlowProviderTest;
+
 class AuthFlow : public Task {
     Q_OBJECT
 
@@ -40,8 +42,16 @@ class AuthFlow : public Task {
     void stepFinished(AccountTaskState resultingState, QString message);
 
    private:
+    friend class AuthFlowProviderTest;
+
     AccountTaskState m_taskState = AccountTaskState::STATE_CREATED;
     QList<AuthStep::Ptr> m_steps;
     AuthStep::Ptr m_currentStep;
     AccountData* m_data = nullptr;
+    /**
+     * Set when MSA auth was requested but no steps could be built (missing /
+     * unsupported provider). Distinguished from a drained step list after a
+     * successful MSA run, which must still call succeed().
+     */
+    bool m_msaProviderUnavailable = false;
 };

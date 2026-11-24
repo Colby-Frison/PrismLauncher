@@ -38,7 +38,6 @@
 #include "services/IconStore.h"
 #include "Application.h"
 #include "ui/pages/modplatform/ModpackProviderBasePage.h"
-#include "ui/pages/modplatform/import_ftb/ImportFTBPage.h"
 #include "ui_NewInstanceDialog.h"
 
 #include <BaseVersion.h>
@@ -59,14 +58,9 @@
 #include <QValidator>
 #include <utility>
 
+#include "modplatform/ModPlatformRegistry.h"
 #include "ui/pages/modplatform/CustomPage.h"
 #include "ui/pages/modplatform/ImportPage.h"
-#include "ui/pages/modplatform/atlauncher/AtlPage.h"
-#include "ui/pages/modplatform/flame/FlamePage.h"
-#include "ui/pages/modplatform/ftb/FtbPage.h"
-#include "ui/pages/modplatform/legacy_ftb/Page.h"
-#include "ui/pages/modplatform/modrinth/ModrinthPage.h"
-#include "ui/pages/modplatform/technic/TechnicPage.h"
 #include "ui/widgets/PageContainer.h"
 
 NewInstanceDialog::NewInstanceDialog(const QString& initialGroup,
@@ -195,17 +189,19 @@ QList<BasePage*> NewInstanceDialog::getPages()
 
     m_importPage = new ImportPage(this);
 
+    // Custom / Import remain special-cased (R3.3). Platform providers come from the registry.
     pages.append(new CustomPage(this));
     pages.append(m_importPage);
-    pages.append(new AtlPage(this));
-    if (APPLICATION->capabilities() & Application::SupportsFlame) {
-        pages.append(new FlamePage(this));
+
+    for (const auto* provider :
+         ModPlatform::ModPlatformRegistry::instance().providersWith(ModPlatform::ProviderCapability::NewInstancePage)) {
+        if (!provider->createNewInstancePage) {
+            continue;
+        }
+        if (BasePage* page = provider->createNewInstancePage(this)) {
+            pages.append(page);
+        }
     }
-    pages.append(new FtbPage(this));
-    pages.append(new LegacyFTB::Page(this));
-    pages.append(new FTBImportAPP::ImportFTBPage(this));
-    pages.append(new ModrinthPage(this));
-    pages.append(new TechnicPage(this));
 
     return pages;
 }

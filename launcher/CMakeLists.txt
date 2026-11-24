@@ -212,6 +212,11 @@ set(MINECRAFT_SOURCES
     minecraft/auth/AccountData.h
     minecraft/auth/AccountList.cpp
     minecraft/auth/AccountList.h
+    minecraft/auth/AuthProvider.h
+    minecraft/auth/AuthProviderRegistry.cpp
+    minecraft/auth/AuthProviderRegistry.h
+    minecraft/auth/AuthProviders.cpp
+    minecraft/auth/AuthProviders.h
     minecraft/auth/AuthSession.cpp
     minecraft/auth/AuthSession.h
     minecraft/auth/AuthStep.h
@@ -510,6 +515,7 @@ set(API_SOURCES
     modplatform/ResourceAPI.cpp
 
     modplatform/ModPlatformProvider.h
+    modplatform/ModPlatformProviders.h
     modplatform/ModPlatformRegistry.h
     modplatform/ModPlatformRegistry.cpp
 
@@ -973,6 +979,7 @@ SET(LAUNCHER_SOURCES
     ui/pages/global/APIPage.h
 
     # GUI - platform pages
+    ui/pages/modplatform/ModPlatformProviderRegistration.cpp
     ui/pages/modplatform/CustomPage.cpp
     ui/pages/modplatform/CustomPage.h
 

@@ -48,6 +48,9 @@
 #include "services/LauncherWindows.h"
 #include "BuildConfig.h"
 
+#include "minecraft/auth/AuthProviders.h"
+#include "modplatform/ModPlatformProviders.h"
+
 #include "DataMigrationTask.h"
 #include "java/JavaInstallList.h"
 #include "net/PasteUpload.h"
@@ -1193,6 +1196,12 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
     });
 
     updateCapabilities();
+
+    // Force-link static registration TUs and ensure built-in providers are present.
+    // Required because Launcher_logic is a static library and registration-only
+    // object files would otherwise be dropped by the linker.
+    ModPlatform::ensureBuiltInProvidersRegistered();
+    Auth::ensureBuiltInProvidersRegistered();
 
     detectLibraries();
 

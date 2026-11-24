@@ -28,7 +28,6 @@
 #include "BaseInstance.h"
 #include "ResourceDownloadTask.h"
 
-#include "minecraft/PackProfile.h"
 #include "minecraft/mod/DataPackFolderModel.h"
 #include "minecraft/mod/ModFolderModel.h"
 #include "minecraft/mod/ResourcePackFolderModel.h"
@@ -46,11 +45,57 @@
 #include "ui/pages/modplatform/flame/FlameResourcePages.h"
 #include "ui/pages/modplatform/modrinth/ModrinthResourcePages.h"
 
-#include "modplatform/flame/FlameAPI.h"
-#include "modplatform/modrinth/ModrinthAPI.h"
+#include "modplatform/ModPlatformRegistry.h"
 #include "ui/widgets/PageContainer.h"
 
 namespace ResourceDownload {
+
+namespace {
+
+QList<BasePage*> buildPagesFromRegistry(ResourceDownloadDialog* dialog,
+                                        BaseInstance& instance,
+                                        ModPlatform::ResourceType type,
+                                        bool suppressInitialSearch)
+{
+    using namespace ModPlatform;
+
+    ProviderCapabilityFlags required = capabilityForResourceType(type);
+    if (type == ModPlatform::ResourceType::Mod) {
+        required |= ProviderCapability::HasResourceAPI;
+    }
+
+    QList<BasePage*> pages;
+    for (const auto* provider : ModPlatformRegistry::instance().providersWith(required)) {
+        auto factory = provider->resourcePageFactory(type);
+        if (!factory) {
+            continue;
+        }
+
+        BasePage* page = factory(dialog, instance);
+        if (!page) {
+            continue;
+        }
+
+        if (auto* resourcePage = dynamic_cast<ResourcePage*>(page)) {
+            resourcePage->setSuppressInitialSearch(suppressInitialSearch);
+        }
+        pages.append(page);
+    }
+
+    // Preserve historical resource-download tab order (Modrinth before CurseForge).
+    // New-instance order remains registration order and differs intentionally.
+    static const QStringList preferredOrder = { QStringLiteral("modrinth"), QStringLiteral("curseforge") };
+    std::stable_sort(pages.begin(), pages.end(), [](BasePage* left, BasePage* right) {
+        const int leftRank = preferredOrder.indexOf(left->id());
+        const int rightRank = preferredOrder.indexOf(right->id());
+        return (leftRank < 0 ? preferredOrder.size() : leftRank) < (rightRank < 0 ? preferredOrder.size() : rightRank);
+    });
+
+    return pages;
+}
+
+}  // namespace
+
 
 ResourceDownloadDialog::ResourceDownloadDialog(QWidget* parent,
                                                ResourceFolderModel* baseModel,
@@ -372,33 +417,17 @@ ResourceDownloadDialog* ResourceDownloadDialog::createMod(QWidget* parent,
                                                           bool suppressInitialSearch)
 {
     auto* dialog = new ResourceDownloadDialog(parent, mods, instance, tr("mods"), "ModDownloadGeometry", suppressInitialSearch);
-    QList<BasePage*> pages;
 
     // need to load all resources for dependency task
-    auto* mInstance = instance;
-    if (mInstance) {
-        for (auto* model : mInstance->resourceLists()) {
-            if (model) {
-                if (model->empty()) {
-                    model->startWatching();
-                }
+    if (instance) {
+        for (auto* model : instance->resourceLists()) {
+            if (model && model->empty()) {
+                model->startWatching();
             }
         }
     }
 
-    auto loaders = instance->getPackProfile()->getSupportedModLoaders().value_or(ModPlatform::ModLoaderTypes(0));
-
-    if (ModrinthAPI::validateModLoaders(loaders)) {
-        auto* page = Modrinth::createModPage(dialog, *instance);
-        page->setSuppressInitialSearch(suppressInitialSearch);
-        pages.append(page);
-    }
-    if (APPLICATION->capabilities() & Application::SupportsFlame && FlameAPI::validateModLoaders(loaders)) {
-        auto* flamePage = Flame::createModPage(dialog, *instance);
-        flamePage->setSuppressInitialSearch(suppressInitialSearch);
-        pages.append(flamePage);
-    }
-    dialog->initPages(pages);
+    dialog->initPages(buildPagesFromRegistry(dialog, *instance, ModPlatform::ResourceType::Mod, suppressInitialSearch));
     return dialog;
 }
 
@@ -408,18 +437,7 @@ ResourceDownloadDialog* ResourceDownloadDialog::createResourcePack(QWidget* pare
                                                                    bool suppressInitialSearch)
 {
     auto* dialog = new ResourceDownloadDialog(parent, mods, instance, tr("resource packs"), "RPDownloadGeometry", suppressInitialSearch);
-    QList<BasePage*> pages;
-
-    auto* page = Modrinth::createResourcePackResourcePage(dialog, *instance);
-    page->setSuppressInitialSearch(suppressInitialSearch);
-    pages.append(page);
-    if (APPLICATION->capabilities() & Application::SupportsFlame) {
-        auto* flamePage = Flame::createResourcePackResourcePage(dialog, *instance);
-        flamePage->setSuppressInitialSearch(suppressInitialSearch);
-        pages.append(flamePage);
-    }
-    dialog->initPages(pages);
-
+    dialog->initPages(buildPagesFromRegistry(dialog, *instance, ModPlatform::ResourceType::ResourcePack, suppressInitialSearch));
     return dialog;
 }
 
@@ -429,18 +447,7 @@ ResourceDownloadDialog* ResourceDownloadDialog::createTexturePack(QWidget* paren
                                                                   bool suppressInitialSearch)
 {
     auto* dialog = new ResourceDownloadDialog(parent, mods, instance, tr("texture packs"), "TPDownloadGeometry", suppressInitialSearch);
-    QList<BasePage*> pages;
-
-    auto* page = Modrinth::createTexturePackResourcePage(dialog, *instance);
-    page->setSuppressInitialSearch(suppressInitialSearch);
-    pages.append(page);
-    if (APPLICATION->capabilities() & Application::SupportsFlame) {
-        auto* flamePage = Flame::createTexturePackResourcePage(dialog, *instance);
-        flamePage->setSuppressInitialSearch(suppressInitialSearch);
-        pages.append(flamePage);
-    }
-    dialog->initPages(pages);
-
+    dialog->initPages(buildPagesFromRegistry(dialog, *instance, ModPlatform::ResourceType::TexturePack, suppressInitialSearch));
     return dialog;
 }
 
@@ -450,18 +457,7 @@ ResourceDownloadDialog* ResourceDownloadDialog::createShaderPack(QWidget* parent
                                                                  bool suppressInitialSearch)
 {
     auto* dialog = new ResourceDownloadDialog(parent, mods, instance, tr("shader packs"), "ShaderDownloadGeometry", suppressInitialSearch);
-    QList<BasePage*> pages;
-
-    auto* page = Modrinth::createShaderPackResourcePage(dialog, *instance);
-    page->setSuppressInitialSearch(suppressInitialSearch);
-    pages.append(page);
-    if (APPLICATION->capabilities() & Application::SupportsFlame) {
-        auto* flamePage = Flame::createShaderPackResourcePage(dialog, *instance);
-        flamePage->setSuppressInitialSearch(suppressInitialSearch);
-        pages.append(flamePage);
-    }
-    dialog->initPages(pages);
-
+    dialog->initPages(buildPagesFromRegistry(dialog, *instance, ModPlatform::ResourceType::ShaderPack, suppressInitialSearch));
     return dialog;
 }
 
@@ -471,18 +467,7 @@ ResourceDownloadDialog* ResourceDownloadDialog::createDataPack(QWidget* parent,
                                                                bool suppressInitialSearch)
 {
     auto* dialog = new ResourceDownloadDialog(parent, mods, instance, tr("data packs"), "DataPackDownloadGeometry", suppressInitialSearch);
-    QList<BasePage*> pages;
-
-    auto* page = Modrinth::createDataPackResourcePage(dialog, *instance);
-    page->setSuppressInitialSearch(suppressInitialSearch);
-    pages.append(page);
-    if (APPLICATION->capabilities() & Application::SupportsFlame) {
-        auto* flamePage = Flame::createDataPackResourcePage(dialog, *instance);
-        flamePage->setSuppressInitialSearch(suppressInitialSearch);
-        pages.append(flamePage);
-    }
-    dialog->initPages(pages);
-
+    dialog->initPages(buildPagesFromRegistry(dialog, *instance, ModPlatform::ResourceType::DataPack, suppressInitialSearch));
     return dialog;
 }
 

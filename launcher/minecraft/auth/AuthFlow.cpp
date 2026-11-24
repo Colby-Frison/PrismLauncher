@@ -14,27 +14,40 @@
 #include "tasks/Task.h"
 
 #include "AuthFlow.h"
+#include "minecraft/auth/AuthProviderRegistry.h"
 
 AuthFlow::AuthFlow(AccountData* data, const AuthContext& context, Action action) : Task(), m_data(data)
 {
+    // Resolve MSA through the auth registry (R3.4). Persistence still uses AccountType.
+    // Offline accounts historically have no AuthFlow steps and complete successfully.
     if (data->type == AccountType::MSA) {
-        auto* network = context.network;
-        if (action == Action::DeviceCode) {
-            auto oauthStep = makeShared<MSADeviceCodeStep>(m_data, network, context.msaClientId());
-            connect(oauthStep.get(), &MSADeviceCodeStep::authorizeWithBrowser, this, &AuthFlow::authorizeWithBrowserWithExtra);
-            m_steps.append(oauthStep);
+        const auto* msaProvider = Auth::AuthProviderRegistry::instance().find(QStringLiteral("msa"));
+        const bool interactive = action != Action::Refresh;
+        const auto neededCapability =
+            interactive ? Auth::AuthCapability::InteractiveLogin : Auth::AuthCapability::SilentRefresh;
+
+        if (msaProvider != nullptr && msaProvider->hasCapability(neededCapability)) {
+            auto* network = context.network;
+            if (action == Action::DeviceCode) {
+                auto oauthStep = makeShared<MSADeviceCodeStep>(m_data, network, context.msaClientId());
+                connect(oauthStep.get(), &MSADeviceCodeStep::authorizeWithBrowser, this, &AuthFlow::authorizeWithBrowserWithExtra);
+                m_steps.append(oauthStep);
+            } else {
+                auto oauthStep = makeShared<MSAStep>(m_data, context, action == Action::Refresh);
+                connect(oauthStep.get(), &MSAStep::authorizeWithBrowser, this, &AuthFlow::authorizeWithBrowser);
+                m_steps.append(oauthStep);
+            }
+            m_steps.append(makeShared<XboxUserStep>(m_data, network));
+            m_steps.append(makeShared<XboxAuthorizationStep>(m_data, network, &m_data->mojangservicesToken,
+                                                             "rp://api.minecraftservices.com/", "Mojang"));
+            m_steps.append(makeShared<LauncherLoginStep>(m_data, network));
+            m_steps.append(makeShared<EntitlementsStep>(m_data, network));
+            m_steps.append(makeShared<MinecraftProfileStep>(m_data, network));
+            m_steps.append(makeShared<GetSkinStep>(m_data, network));
         } else {
-            auto oauthStep = makeShared<MSAStep>(m_data, context, action == Action::Refresh);
-            connect(oauthStep.get(), &MSAStep::authorizeWithBrowser, this, &AuthFlow::authorizeWithBrowser);
-            m_steps.append(oauthStep);
+            // Do not treat a later drained step list as this failure mode.
+            m_msaProviderUnavailable = true;
         }
-        m_steps.append(makeShared<XboxUserStep>(m_data, network));
-        m_steps.append(makeShared<XboxAuthorizationStep>(m_data, network, &m_data->mojangservicesToken, "rp://api.minecraftservices.com/",
-                                                         "Mojang"));
-        m_steps.append(makeShared<LauncherLoginStep>(m_data, network));
-        m_steps.append(makeShared<EntitlementsStep>(m_data, network));
-        m_steps.append(makeShared<MinecraftProfileStep>(m_data, network));
-        m_steps.append(makeShared<GetSkinStep>(m_data, network));
     }
     changeState(AccountTaskState::STATE_CREATED);
 }
@@ -57,8 +70,13 @@ void AuthFlow::nextStep()
         return;
     }
     if (m_steps.size() == 0) {
-        // we got to the end without an incident... assume this is all.
         m_currentStep.reset();
+        if (m_msaProviderUnavailable) {
+            // MSA requested but no steps were ever queued (missing/unsupported provider).
+            changeState(AccountTaskState::STATE_FAILED_HARD, tr("Microsoft authentication provider is unavailable."));
+            return;
+        }
+        // Offline flows, or MSA after the last step emitted STATE_WORKING.
         succeed();
         return;
     }

@@ -127,9 +127,11 @@ class ResourceAPI {
    public:
     NetworkContext* network() const { return m_network; }
 
-   protected:
+    // Public virtual so ModPlatformProvider::createResourceAPI can return std::unique_ptr<ResourceAPI>.
+    virtual ~ResourceAPI() = default;
+
+  protected:
     explicit ResourceAPI(NetworkContext* network) : m_network(network) {}
-    ~ResourceAPI() = default;
 
     virtual QString debugName() const { return "External resource API"; }
 
