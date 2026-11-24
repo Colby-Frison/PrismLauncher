@@ -41,6 +41,8 @@ class AccountService {
 
     virtual void addAccount(MinecraftAccountPtr account) = 0;
     virtual void removeAccount(QModelIndex index) = 0;
+    /** Remove by list row when the caller already resolved the index. */
+    virtual void removeAccountAt(int row) = 0;
 
     virtual int findAccountByProfileId(const QString& profileId) const = 0;
     virtual MinecraftAccountPtr getAccountByProfileName(const QString& profileName) const = 0;

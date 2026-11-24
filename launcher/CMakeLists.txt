@@ -434,8 +434,6 @@ set(SERVICE_SOURCES
     services/IconListIconStore.h
     services/LauncherWindows.h
     services/JavaEnvironment.h
-    LaunchCoordinator.h
-    LaunchCoordinator.cpp
 )
 
 set(JAVA_SOURCES
@@ -904,6 +902,16 @@ SET(LAUNCHER_SOURCES
     LaunchMode.h
     LaunchController.h
     LaunchController.cpp
+    LaunchCoordinator.h
+    LaunchCoordinator.cpp
+    LaunchUiHints.h
+    LaunchUiHints.cpp
+    AccountCoordinator.h
+    AccountCoordinator.cpp
+
+    # Workflow coordinators (R2)
+    CreateInstanceCoordinator.h
+    CreateInstanceCoordinator.cpp
 
     # page provider for instances
     InstancePageProvider.h

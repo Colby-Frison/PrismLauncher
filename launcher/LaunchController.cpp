@@ -35,6 +35,7 @@
  */
 
 #include "LaunchController.h"
+#include "AccountCoordinator.h"
 #include "services/LauncherWindows.h"
 #include "Application.h"
 #include "launch/steps/PrintServers.h"
@@ -344,17 +345,12 @@ bool LaunchController::reauthenticateAccount(const MinecraftAccountPtr& account,
         m_parentWidget, tr("Account refresh failed"), tr("%1. Do you want to reauthenticate this account?").arg(reason),
         QMessageBox::StandardButton::Yes | QMessageBox::StandardButton::No, QMessageBox::StandardButton::Yes);
     if (button == QMessageBox::StandardButton::Yes) {
-        auto* accounts = APPLICATION->accounts();
-        const bool isDefault = accounts->defaultAccount() == account;
         if (account->accountType() == AccountType::MSA) {
             auto newAccount = MSALoginDialog::newAccount(m_parentWidget);
 
             if (newAccount != nullptr) {
-                accounts->removeAccount(accounts->index(accounts->findAccountByProfileId(account->profileId())));
-                accounts->addAccount(newAccount);
-
-                if (isDefault) {
-                    accounts->setDefaultAccount(newAccount);
+                if (m_accountCoordinator) {
+                    m_accountCoordinator->replaceAccount(account, newAccount);
                 }
 
                 if (m_accountToUse == account) {

@@ -18,10 +18,16 @@
 #include "ui/pages/instance/VersionPage.h"
 #include "ui/pages/instance/WorldListPage.h"
 
+class InstanceCatalog;
+class LauncherSettings;
+
 class InstancePageProvider : protected QObject, public BasePageProvider {
     Q_OBJECT
    public:
-    explicit InstancePageProvider(MinecraftInstance* parent) { inst = parent; }
+    explicit InstancePageProvider(MinecraftInstance* parent, InstanceCatalog* catalog = nullptr, LauncherSettings* settings = nullptr)
+        : inst(parent), m_catalog(catalog), m_settings(settings)
+    {
+    }
 
     virtual ~InstancePageProvider() = default;
     virtual QList<BasePage*> getPages() override
@@ -29,7 +35,7 @@ class InstancePageProvider : protected QObject, public BasePageProvider {
         QList<BasePage*> values;
         values.append(new LogPage(inst));
         values.append(new VersionPage(inst));
-        values.append(ManagedPackPage::createPage(inst));
+        values.append(ManagedPackPage::createPage(inst, m_catalog, m_settings));
         auto modsPage = new ModFolderPage(inst, inst->loaderModList());
         modsPage->setFilter("%1 (*.zip *.jar *.litemod *.nilmod)");
         values.append(modsPage);
@@ -52,4 +58,6 @@ class InstancePageProvider : protected QObject, public BasePageProvider {
 
    protected:
     MinecraftInstance* inst;
+    InstanceCatalog* m_catalog = nullptr;
+    LauncherSettings* m_settings = nullptr;
 };

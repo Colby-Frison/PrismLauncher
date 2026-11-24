@@ -46,6 +46,7 @@
 #include <QProcess>
 #include <QTimer>
 
+#include "LaunchMode.h"
 #include "minecraft/auth/MinecraftAccount.h"
 
 class LaunchController;
@@ -55,6 +56,7 @@ class InstanceProxyModel;
 class LabeledToolButton;
 class QLabel;
 class MinecraftInstance;
+class BaseInstance;
 class MinecraftLauncher;
 class BaseProfilerFactory;
 class InstanceView;
@@ -66,14 +68,18 @@ class LauncherSettings;
 class InstanceCatalog;
 class AccountService;
 class NetworkContext;
+class CreateInstanceCoordinator;
+class IInstanceTaskRunner;
+class LaunchCoordinator;
+class ILaunchExtrasStore;
+class AccountCoordinator;
+class IconStore;
+class JavaEnvironment;
+class LauncherWindows;
 
 namespace Ui {
 class MainWindow;
 }
-class IconStore;
-class JavaEnvironment;
-class LaunchCoordinator;
-class LauncherWindows;
 namespace Meta {
 class Index;
 }
@@ -87,7 +93,9 @@ class MainWindow : public QMainWindow {
                AccountService* accounts,
                NetworkContext* network,
                IconStore* icons,
-               LaunchCoordinator* launch,
+               LaunchCoordinator* launches,
+               ILaunchExtrasStore* launchExtras,
+               AccountCoordinator* accountCoordinator,
                LauncherWindows* windows,
                Meta::Index* metadata,
                JavaEnvironment* java,
@@ -251,8 +259,10 @@ class MainWindow : public QMainWindow {
     void updateStatusCenter();
     void setInstanceActionsEnabled(bool enabled);
 
-    void runModalTask(Task* task);
+    bool runModalTask(Task* task);
     void instanceFromInstanceTask(InstanceTask* task);
+    bool requestLaunch(MinecraftInstance* instance, LaunchMode mode = LaunchMode::Normal);
+    bool requestKill(BaseInstance* instance);
 
    private:
     Ui::MainWindow* ui;
@@ -262,11 +272,16 @@ class MainWindow : public QMainWindow {
     InstanceCatalog* m_instances;
     AccountService* m_accounts;
     NetworkContext* m_network;
-    IconStore* m_icons;
-    LaunchCoordinator* m_launch;
-    LauncherWindows* m_windows;
-    Meta::Index* m_metadata;
-    JavaEnvironment* m_java;
+    IconStore* m_icons = nullptr;
+    LaunchCoordinator* m_launchCoordinator = nullptr;
+    ILaunchExtrasStore* m_launchExtras = nullptr;
+    AccountCoordinator* m_accountCoordinator = nullptr;
+    LauncherWindows* m_windows = nullptr;
+    Meta::Index* m_metadata = nullptr;
+    JavaEnvironment* m_java = nullptr;
+
+    std::unique_ptr<IInstanceTaskRunner> m_instanceTaskRunner;
+    std::unique_ptr<CreateInstanceCoordinator> m_createInstances;
 
     // these are managed by Qt's memory management model!
     InstanceView* view = nullptr;

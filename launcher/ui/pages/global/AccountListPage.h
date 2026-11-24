@@ -47,12 +47,14 @@ namespace Ui {
 class AccountListPage;
 }
 
+class AccountCoordinator;
+class AccountService;
 class AuthenticateTask;
 
 class AccountListPage : public QMainWindow, public BasePage {
     Q_OBJECT
    public:
-    explicit AccountListPage(QWidget* parent = 0);
+    explicit AccountListPage(AccountCoordinator* accountCoordinator, AccountService* accounts, QWidget* parent = 0);
     ~AccountListPage();
 
     QString displayName() const override { return tr("Accounts"); }
@@ -90,6 +92,7 @@ class AccountListPage : public QMainWindow, public BasePage {
    private:
     void changeEvent(QEvent* event) override;
     QMenu* createPopupMenu() override;
+    AccountCoordinator* m_accountCoordinator = nullptr;
     AccountList* m_accounts;
     Ui::AccountListPage* ui;
 };

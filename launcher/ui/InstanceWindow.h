@@ -47,13 +47,18 @@
 
 #include "QObjectPtr.h"
 
+class InstanceCatalog;
+class LauncherSettings;
 class QPushButton;
 class PageContainer;
 class InstanceWindow : public QMainWindow, public BasePageContainer {
     Q_OBJECT
 
    public:
-    explicit InstanceWindow(MinecraftInstance* proc, QWidget* parent = 0);
+    explicit InstanceWindow(MinecraftInstance* proc,
+                            InstanceCatalog* catalog = nullptr,
+                            LauncherSettings* settings = nullptr,
+                            QWidget* parent = 0);
     virtual ~InstanceWindow() = default;
 
     bool selectPage(QString pageId) override;

@@ -171,8 +171,8 @@ IconPickerDialog::IconPickerDialog(IconStore* icons, QWidget* parent) : QDialog(
         filterIconsByCategory(category);
     });
     // Prevent incorrect indices from e.g. filesystem changes
-    if (auto* icons = iconList()) {
-        connect(icons, &IconList::iconUpdated, this, [this]() { proxyModel->invalidate(); });
+    if (auto* iconModel = iconList()) {
+        connect(iconModel, &IconList::iconUpdated, this, [this]() { proxyModel->invalidate(); });
     }
 }
 

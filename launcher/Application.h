@@ -53,6 +53,11 @@
 #include "minecraft/auth/MinecraftAccount.h"
 
 class LaunchController;
+class LaunchCoordinator;
+class ILaunchExtrasStore;
+class IRunningInstanceCounter;
+class ApplicationLaunchExtrasStore;
+class ApplicationRunningInstanceCounter;
 class LocalPeer;
 class InstanceWindow;
 class MainWindow;
@@ -86,6 +91,7 @@ class LauncherSettings;
 class NetworkContext;
 class InstanceCatalog;
 class AccountService;
+class AccountCoordinator;
 class FlameAPI;
 class ModrinthAPI;
 class IconStore;
@@ -106,14 +112,10 @@ class Index;
 #define APPLICATION_DYN (dynamic_cast<Application*>(QCoreApplication::instance()))
 
 class JavaEnvironment;
-class LaunchCoordinator;
-class LaunchHost;
 class LauncherWindows;
-class ApplicationLaunchHost;
 
 class Application : public QApplication {
     Q_OBJECT
-    friend class ApplicationLaunchHost;
 
    public:
     enum Status : std::uint8_t { StartingUp, Failed, Succeeded, Initialized };
@@ -166,6 +168,15 @@ class Application : public QApplication {
     /** Narrow account service for injection; Application owns the wrapper. */
     AccountService* accountService() const { return m_accountService.get(); }
 
+    /** Account / OAuth workflow coordinator; Application owns it. */
+    AccountCoordinator* accountCoordinator() const { return m_accountCoordinator.get(); }
+
+    /** Launch workflow coordinator; Application owns it. */
+    LaunchCoordinator* launchCoordinator() const { return m_launchCoordinator.get(); }
+
+    /** Per-instance launch extras store used with LaunchCoordinator kill/launch. */
+    ILaunchExtrasStore* launchExtrasStore() const { return m_launchExtrasStore.get(); }
+
     Status status() const { return m_status; }
 
     const QMap<QString, std::shared_ptr<BaseProfilerFactory>>& profilers() const { return m_profilers; }
@@ -190,7 +201,6 @@ class Application : public QApplication {
     InstanceServices instanceServices();
     const LauncherRuntimeInfo& runtime() const { return m_runtime; }
 
-    LaunchCoordinator* launchCoordinator() const { return m_launchCoordinator.get(); }
     LauncherWindows* launcherWindows() const { return m_windows.get(); }
     JavaEnvironment* javaEnvironment() const { return m_javaEnvironment.get(); }
 
@@ -317,9 +327,15 @@ class Application : public QApplication {
     std::unique_ptr<OAuthCallbackRelay> m_oauthCallbacks;
     std::unique_ptr<InstanceCatalog> m_instanceCatalog;
     std::unique_ptr<AccountService> m_accountService;
+    std::unique_ptr<AccountCoordinator> m_accountCoordinator;
+
+    // Launch orchestration (R2). Adapters access InstanceXtras; coordinator after them.
+    friend class ApplicationLaunchExtrasStore;
+    friend class ApplicationRunningInstanceCounter;
+    std::unique_ptr<ILaunchExtrasStore> m_launchExtrasStore;
+    std::unique_ptr<IRunningInstanceCounter> m_runningInstanceCounter;
     std::unique_ptr<LauncherWindows> m_windows;
     std::unique_ptr<JavaEnvironment> m_javaEnvironment;
-    std::unique_ptr<LaunchHost> m_launchHost;
     std::unique_ptr<LaunchCoordinator> m_launchCoordinator;
 
     // Hold a non-owning NetworkContext*; declared after m_networkContext so they are destroyed first.

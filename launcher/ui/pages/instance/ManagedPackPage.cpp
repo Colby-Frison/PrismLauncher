@@ -14,30 +14,75 @@
 #include <memory>
 
 #include "Application.h"
+#include "CreateInstanceCoordinator.h"
 #include "InstanceImportTask.h"
 #include "InstanceList.h"
 #include "InstanceTask.h"
 #include "Markdown.h"
 #include "StringUtils.h"
+#include "services/InstanceCatalog.h"
+#include "services/LauncherSettings.h"
+#include "tasks/Task.h"
 
 #include "ui/InstanceWindow.h"
 #include "ui/dialogs/CustomMessageBox.h"
 #include "ui/dialogs/ProgressDialog.h"
 
-ManagedPackPage* ManagedPackPage::createPage(BaseInstance* inst, const QString& type, QWidget* parent)
+namespace {
+class ManagedPackTaskRunner final : public IInstanceTaskRunner {
+   public:
+    explicit ManagedPackTaskRunner(ManagedPackPage* page) : m_page(page) {}
+
+    bool run(Task* stagedTask) override
+    {
+        QObject::connect(stagedTask, &Task::failed, m_page, [page = m_page](const QString& reason) {
+            CustomMessageBox::selectable(page, page->tr("Error"), reason, QMessageBox::Critical)->show();
+        });
+        QObject::connect(stagedTask, &Task::succeeded, m_page, [page = m_page, stagedTask]() {
+            QStringList warnings = stagedTask->warnings();
+            if (warnings.count()) {
+                CustomMessageBox::selectable(page, page->tr("Warnings"), warnings.join('\n'), QMessageBox::Warning)->show();
+            }
+        });
+
+        ProgressDialog loadDialog(m_page);
+        loadDialog.setSkipButton(true, m_page->tr("Abort"));
+        loadDialog.execWithTask(stagedTask);
+        return stagedTask && stagedTask->wasSuccessful();
+    }
+
+   private:
+    ManagedPackPage* m_page = nullptr;
+};
+}  // namespace
+
+ManagedPackPage* ManagedPackPage::createPage(BaseInstance* inst,
+                                             const QString& type,
+                                             InstanceCatalog* catalog,
+                                             LauncherSettings* settings,
+                                             QWidget* parent)
 {
     if (type == "modrinth") {
-        return new ModrinthManagedPackPage(inst, nullptr, parent);
+        return new ModrinthManagedPackPage(inst, nullptr, catalog, settings, parent);
     }
     if (type == "flame" && ((APPLICATION->capabilities() & Application::SupportsFlame) != 0U)) {
-        return new FlameManagedPackPage(inst, nullptr, parent);
+        return new FlameManagedPackPage(inst, nullptr, catalog, settings, parent);
     }
 
-    return new GenericManagedPackPage(inst, nullptr, parent);
+    return new GenericManagedPackPage(inst, nullptr, catalog, settings, parent);
 }
 
-ManagedPackPage::ManagedPackPage(BaseInstance* inst, InstanceWindow* instanceWindow, QWidget* parent)
-    : QWidget(parent), m_instanceWindow(instanceWindow), ui(new Ui::ManagedPackPage), m_inst(inst)
+ManagedPackPage::ManagedPackPage(BaseInstance* inst,
+                                 InstanceWindow* instanceWindow,
+                                 InstanceCatalog* catalog,
+                                 LauncherSettings* settings,
+                                 QWidget* parent)
+    : QWidget(parent)
+    , m_instanceWindow(instanceWindow)
+    , m_catalog(catalog)
+    , m_settings(settings)
+    , ui(new Ui::ManagedPackPage)
+    , m_inst(inst)
 {
     Q_ASSERT(inst);
 
@@ -143,23 +188,15 @@ bool ManagedPackPage::shouldDisplay() const
 bool ManagedPackPage::runUpdateTask(InstanceTask* task)
 {
     Q_ASSERT(task);
+    if (!m_catalog || !m_settings) {
+        return false;
+    }
 
-    const unique_qobject_ptr<Task> wrappedTask(APPLICATION->instances()->wrapInstanceTask(task));
-
-    connect(wrappedTask.get(), &Task::failed, this,
-            [this](const QString& reason) { CustomMessageBox::selectable(this, tr("Error"), reason, QMessageBox::Critical)->show(); });
-    connect(wrappedTask.get(), &Task::succeeded, this, [this, task]() {
-        QStringList warnings = task->warnings();
-        if (warnings.count()) {
-            CustomMessageBox::selectable(this, tr("Warnings"), warnings.join('\n'), QMessageBox::Warning)->show();
-        }
-    });
-
-    ProgressDialog loadDialog(this);
-    loadDialog.setSkipButton(true, tr("Abort"));
-    loadDialog.execWithTask(wrappedTask.get());
-
-    return wrappedTask->wasSuccessful();
+    ManagedPackTaskRunner runner(this);
+    CreateInstanceCoordinator coordinator(m_catalog, m_settings, &runner);
+    CreateInstanceCoordinator::CreateRequest request;
+    request.task = task;
+    return coordinator.createFromTask(request) == CreateInstanceCoordinator::Outcome::Succeeded;
 }
 
 void ManagedPackPage::suggestVersion()
@@ -186,8 +223,12 @@ void ManagedPackPage::setFailState()
     ui->reloadButton->setVisible(true);
 }
 
-ModrinthManagedPackPage::ModrinthManagedPackPage(BaseInstance* inst, InstanceWindow* instanceWindow, QWidget* parent)
-    : ManagedPackPage(inst, instanceWindow, parent)
+ModrinthManagedPackPage::ModrinthManagedPackPage(BaseInstance* inst,
+                                                 InstanceWindow* instanceWindow,
+                                                 InstanceCatalog* catalog,
+                                                 LauncherSettings* settings,
+                                                 QWidget* parent)
+    : ManagedPackPage(inst, instanceWindow, catalog, settings, parent)
 {
     Q_ASSERT(inst->isManagedPack());
     connect(ui->versionsComboBox, &QComboBox::currentIndexChanged, this, &ModrinthManagedPackPage::suggestVersion);
@@ -324,8 +365,12 @@ void ModrinthManagedPackPage::updateFromFile()
 }
 
 // FLAME
-FlameManagedPackPage::FlameManagedPackPage(BaseInstance* inst, InstanceWindow* instanceWindow, QWidget* parent)
-    : ManagedPackPage(inst, instanceWindow, parent)
+FlameManagedPackPage::FlameManagedPackPage(BaseInstance* inst,
+                                           InstanceWindow* instanceWindow,
+                                           InstanceCatalog* catalog,
+                                           LauncherSettings* settings,
+                                           QWidget* parent)
+    : ManagedPackPage(inst, instanceWindow, catalog, settings, parent)
 {
     Q_ASSERT(inst->isManagedPack());
     connect(ui->versionsComboBox, &QComboBox::currentIndexChanged, this, &FlameManagedPackPage::suggestVersion);

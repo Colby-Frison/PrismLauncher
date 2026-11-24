@@ -117,6 +117,7 @@
 #include "icons/IconList.h"
 #include "net/HttpMetaCache.h"
 
+#include "AccountCoordinator.h"
 #include "modplatform/flame/FlameAPI.h"
 #include "modplatform/modrinth/ModrinthAPI.h"
 #include "services/AccountListService.h"
@@ -124,6 +125,54 @@
 #include "services/InstanceListCatalog.h"
 #include "services/SettingsObjectLauncherSettings.h"
 #include "services/SharedNetworkContext.h"
+
+#include "LaunchCoordinator.h"
+#include "LaunchUiHints.h"
+
+class ApplicationLaunchExtrasStore final : public ILaunchExtrasStore {
+   public:
+    explicit ApplicationLaunchExtrasStore(Application* app) : m_app(app) {}
+
+    bool saveOpenWindow(const QString& instanceId) override
+    {
+        QMutexLocker locker(&m_app->m_instanceExtrasMutex);
+        auto& extras = m_app->m_instanceExtras[instanceId];
+        if (extras.window && !extras.window->saveAll()) {
+            return false;
+        }
+        return true;
+    }
+
+    void setController(const QString& instanceId, std::unique_ptr<LaunchController> controller) override
+    {
+        QMutexLocker locker(&m_app->m_instanceExtrasMutex);
+        QObject::connect(controller.get(), &LaunchController::finished, m_app, &Application::controllerFinished);
+        m_app->m_instanceExtras[instanceId].controller = std::move(controller);
+    }
+
+    LaunchController* controller(const QString& instanceId) const override
+    {
+        QMutexLocker locker(&m_app->m_instanceExtrasMutex);
+        auto it = m_app->m_instanceExtras.find(instanceId);
+        if (it == m_app->m_instanceExtras.end()) {
+            return nullptr;
+        }
+        return it->second.controller.get();
+    }
+
+   private:
+    Application* m_app = nullptr;
+};
+
+class ApplicationRunningInstanceCounter final : public IRunningInstanceCounter {
+   public:
+    explicit ApplicationRunningInstanceCounter(Application* app) : m_app(app) {}
+
+    void addRunningInstance() override { m_app->addRunningInstance(); }
+
+   private:
+    Application* m_app = nullptr;
+};
 
 #include "updater/ExternalUpdater.h"
 
@@ -333,65 +382,6 @@ class ApplicationJavaEnvironment final : public JavaEnvironment {
 };
 
 }  // namespace
-
-class ApplicationLaunchHost final : public LaunchHost {
-   public:
-    explicit ApplicationLaunchHost(Application* app) : m_app(app) {}
-
-    bool saveInstanceWindow(const QString& instanceId) override
-    {
-        QMutexLocker locker(&m_app->m_instanceExtrasMutex);
-        auto* window = m_app->m_instanceExtras[instanceId].window;
-        locker.unlock();
-        return window == nullptr || window->saveAll();
-    }
-
-    QWidget* instanceWindow(const QString& instanceId) const override
-    {
-        QMutexLocker locker(&m_app->m_instanceExtrasMutex);
-        auto it = m_app->m_instanceExtras.find(instanceId);
-        if (it == m_app->m_instanceExtras.end()) {
-            return nullptr;
-        }
-        return it->second.window;
-    }
-
-    QWidget* mainWindow() const override { return m_app->m_mainWindow; }
-
-    void adoptController(const QString& instanceId, std::unique_ptr<LaunchController> controller) override
-    {
-        QMutexLocker locker(&m_app->m_instanceExtrasMutex);
-        m_app->m_instanceExtras[instanceId].controller = std::move(controller);
-    }
-
-    LaunchController* controller(const QString& instanceId) const override
-    {
-        QMutexLocker locker(&m_app->m_instanceExtrasMutex);
-        auto it = m_app->m_instanceExtras.find(instanceId);
-        if (it == m_app->m_instanceExtras.end()) {
-            return nullptr;
-        }
-        return it->second.controller.get();
-    }
-
-    BaseProfilerFactory* profiler(const QString& id) const override { return m_app->m_profilers.value(id, nullptr).get(); }
-
-    bool isUpdateRunning() const override { return m_app->m_updateRunning; }
-
-    void addRunningInstance() override { m_app->addRunningInstance(); }
-
-    void watch(LaunchController* controller) override
-    {
-        QObject::connect(controller, &LaunchController::finished, m_app, &Application::controllerFinished);
-    }
-
-    LauncherWindows* windows() const override { return m_app->m_windows.get(); }
-
-    const QMap<QString, std::shared_ptr<BaseProfilerFactory>>& profilers() const override { return m_app->m_profilers; }
-
-   private:
-    Application* m_app;
-};
 
 Application::Application(int& argc, char** argv) : QApplication(argc, argv)
 {
@@ -1019,7 +1009,9 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
             m_globalSettingsProvider->addPage<MinecraftPage>();
             m_globalSettingsProvider->addPageCreator(
                 [this]() { return new JavaPage(m_javaEnvironment.get(), m_launcherSettings.get(), metadataIndex()); });
-            m_globalSettingsProvider->addPage<AccountListPage>();
+            // AccountListPage needs AccountCoordinator/AccountService, which are
+            // wired later in this constructor; the creator runs when Settings opens.
+            m_globalSettingsProvider->addPageCreator([this]() { return new AccountListPage(accountCoordinator(), accountService()); });
             m_globalSettingsProvider->addPage<APIPage>();
             m_globalSettingsProvider->addPageCreator([this]() { return new ExternalToolsPage(m_launchCoordinator.get()); });
             m_globalSettingsProvider->addPage<ProxyPage>();
@@ -1128,8 +1120,11 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         m_iconStore = std::make_unique<IconListIconStore>(m_icons.get());
         m_windows = std::make_unique<ApplicationWindows>(this);
         m_javaEnvironment = std::make_unique<ApplicationJavaEnvironment>(this);
-        m_launchHost = std::make_unique<ApplicationLaunchHost>(this);
-        m_launchCoordinator = std::make_unique<LaunchCoordinator>(m_launchHost.get());
+        m_launchExtrasStore = std::unique_ptr<ILaunchExtrasStore>(new ApplicationLaunchExtrasStore(this));
+        m_runningInstanceCounter = std::unique_ptr<IRunningInstanceCounter>(new ApplicationRunningInstanceCounter(this));
+        // AccountCoordinator is wired after accounts load; setAccountCoordinator fills it in.
+        m_launchCoordinator = std::make_unique<LaunchCoordinator>(m_launchExtrasStore.get(), m_runningInstanceCounter.get(),
+                                                                  m_updateRunning, nullptr, m_windows.get(), &m_profilers);
 
         m_instances.reset(new InstanceList(m_settings.get(), allInstDirs, instanceServices(), this));
         connect(instDirSetting.get(), &Setting::SettingChanged, m_instances.get(), &InstanceList::on_InstFolderChanged);
@@ -1154,6 +1149,13 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
     {
         m_accounts.reset(new AccountList(authContext(), this));
         m_accountService = std::make_unique<AccountListService>(m_accounts.get());
+        m_accountCoordinator = std::make_unique<AccountCoordinator>(m_accountService.get());
+        // Keep legacy Application::oauthReplyRecieved listeners working while UI
+        // delivers callbacks through the coordinator.
+        connect(m_accountCoordinator.get(), &AccountCoordinator::oauthReplyReceived, this, &Application::oauthReplyRecieved);
+        if (m_launchCoordinator) {
+            m_launchCoordinator->setAccountCoordinator(m_accountCoordinator.get());
+        }
         qInfo() << "Loading accounts...";
         m_accounts->setListFilePath("accounts.json", true);
         m_accounts->loadList();
@@ -1410,7 +1412,7 @@ bool Application::createSetupWizard()
         }
 
         if (login) {
-            m_setupWizard->addPage(new LoginWizardPage(m_setupWizard));
+            m_setupWizard->addPage(new LoginWizardPage(accountCoordinator(), m_setupWizard));
         }
         connect(m_setupWizard, &QDialog::finished, this, &Application::setupWizardFinished);
         m_setupWizard->show();
@@ -1662,12 +1664,37 @@ bool Application::launch(MinecraftInstance* instance,
                          MinecraftAccountPtr accountToUse,
                          const QString& offlineName)
 {
-    return m_launchCoordinator->launch(instance, mode, std::move(targetToJoin), std::move(accountToUse), offlineName);
+    if (!instance || !m_launchCoordinator) {
+        return false;
+    }
+
+    LaunchCoordinator::LaunchRequest request;
+    request.instance = instance;
+    request.mode = mode;
+    request.targetToJoin = std::move(targetToJoin);
+    request.accountToUse = std::move(accountToUse);
+    request.offlineName = offlineName;
+    request.profiler = profilers().value(instance->settings()->get("Profiler").toString(), nullptr).get();
+
+    {
+        QMutexLocker locker(&m_instanceExtrasMutex);
+        auto& extras = m_instanceExtras[instance->id()];
+        if (extras.window) {
+            request.parentWidget = extras.window;
+        } else if (m_mainWindow) {
+            request.parentWidget = m_mainWindow;
+        }
+    }
+
+    const auto outcome = m_launchCoordinator->requestLaunch(request);
+    return LaunchUiHints::handleLaunchOutcome(outcome, [this, instance](const LaunchUiHints::InstanceWindowHint& hint) {
+        showInstanceWindow(instance, hint.page);
+    });
 }
 
 bool Application::kill(BaseInstance* instance)
 {
-    return m_launchCoordinator->kill(instance);
+    return LaunchUiHints::killInstance(m_launchCoordinator.get(), m_launchExtrasStore.get(), instance);
 }
 
 void Application::closeCurrentWindow()
@@ -1710,6 +1737,9 @@ bool Application::updatesAreAllowed() const
 void Application::updateIsRunning(bool running)
 {
     m_updateRunning = running;
+    if (m_launchCoordinator) {
+        m_launchCoordinator->setUpdateRunning(running);
+    }
 }
 
 void Application::controllerFinished()
@@ -1762,7 +1792,8 @@ MainWindow* Application::showMainWindow(bool minimized)
         m_mainWindow->activateWindow();
     } else {
         m_mainWindow = new MainWindow(launcherSettings(), instanceCatalog(), accountService(), networkContext(), m_iconStore.get(),
-                                     m_launchCoordinator.get(), m_windows.get(), metadataIndex(), m_javaEnvironment.get());
+                                      launchCoordinator(), launchExtrasStore(), accountCoordinator(), m_windows.get(), metadataIndex(),
+                                      m_javaEnvironment.get());
         m_mainWindow->restoreState(QByteArray::fromBase64(APPLICATION->settings()->get("MainWindowState").toString().toUtf8()));
         m_mainWindow->restoreGeometry(QByteArray::fromBase64(APPLICATION->settings()->get("MainWindowGeometry").toString().toUtf8()));
 
@@ -1819,7 +1850,7 @@ InstanceWindow* Application::showInstanceWindow(MinecraftInstance* instance, con
         window->raise();
         window->activateWindow();
     } else {
-        window = new InstanceWindow(instance);
+        window = new InstanceWindow(instance, instanceCatalog(), launcherSettings());
         m_openWindows++;
         connect(window, &InstanceWindow::isClosing, this, &Application::on_windowClose);
     }
