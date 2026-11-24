@@ -12,6 +12,7 @@
 
 #include "QObjectPtr.h"
 #include "minecraft/auth/AccountData.h"
+#include "minecraft/auth/AuthContext.h"
 #include "minecraft/auth/AuthFlow.h"
 #include "minecraft/auth/AuthProviderRegistry.h"
 #include "minecraft/auth/AuthStep.h"
@@ -37,7 +38,8 @@ class AuthFlowProviderTest : public QObject {
         AccountData data;
         data.type = AccountType::MSA;
 
-        AuthFlow flow(&data, AuthFlow::Action::Login);
+        AuthContext context;
+        AuthFlow flow(&data, context, AuthFlow::Action::Login);
         flow.start();
 
         QTRY_VERIFY_WITH_TIMEOUT(flow.isFinished(), 2000);
@@ -57,7 +59,8 @@ class AuthFlowProviderTest : public QObject {
         AccountData data;
         data.type = AccountType::MSA;
 
-        AuthFlow flow(&data, AuthFlow::Action::Login);
+        AuthContext context;
+        AuthFlow flow(&data, context, AuthFlow::Action::Login);
         flow.start();
 
         QTRY_VERIFY_WITH_TIMEOUT(flow.isFinished(), 2000);
@@ -70,7 +73,8 @@ class AuthFlowProviderTest : public QObject {
         AccountData data;
         data.type = AccountType::Offline;
 
-        AuthFlow flow(&data, AuthFlow::Action::Login);
+        AuthContext context;
+        AuthFlow flow(&data, context, AuthFlow::Action::Login);
         flow.start();
 
         QTRY_VERIFY_WITH_TIMEOUT(flow.isFinished(), 2000);
@@ -88,14 +92,15 @@ class AuthFlowProviderTest : public QObject {
         AccountData data;
         data.type = AccountType::MSA;
 
-        AuthFlow flow(&data, AuthFlow::Action::Login);
+        AuthContext context;
+        AuthFlow flow(&data, context, AuthFlow::Action::Login);
         QVERIFY(flow.m_msaProviderUnavailable);
         QVERIFY(flow.m_steps.isEmpty());
 
         // Same post-construction state as when the MSA provider successfully
         // queued steps: failure flag clear, at least one step present.
         flow.m_msaProviderUnavailable = false;
-        flow.m_steps.append(makeShared<InstantSuccessStep>(&data));
+        flow.m_steps.append(makeShared<InstantSuccessStep>(&data, nullptr));
 
         flow.start();
 

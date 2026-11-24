@@ -225,6 +225,8 @@ set(MINECRAFT_SOURCES
     minecraft/auth/Parsers.cpp
     minecraft/auth/Parsers.h
 
+    minecraft/auth/AuthContext.cpp
+    minecraft/auth/AuthContext.h
     minecraft/auth/AuthFlow.cpp
     minecraft/auth/AuthFlow.h
 
@@ -282,6 +284,7 @@ set(MINECRAFT_SOURCES
     minecraft/launch/AutoInstallJava.h
 
     minecraft/GradleSpecifier.h
+    minecraft/InstanceServices.h
     minecraft/MinecraftInstance.cpp
     minecraft/MinecraftInstance.h
     minecraft/LaunchProfile.cpp
@@ -432,6 +435,12 @@ set(SERVICE_SOURCES
     services/AccountService.h
     services/AccountListService.h
     services/AccountListService.cpp
+    services/IconStore.h
+    services/IconListIconStore.h
+    services/LauncherWindows.h
+    services/JavaEnvironment.h
+    LaunchCoordinator.h
+    LaunchCoordinator.cpp
 )
 
 set(JAVA_SOURCES

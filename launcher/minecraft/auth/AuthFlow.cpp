@@ -16,9 +16,7 @@
 #include "AuthFlow.h"
 #include "minecraft/auth/AuthProviderRegistry.h"
 
-#include <Application.h>
-
-AuthFlow::AuthFlow(AccountData* data, Action action) : Task(), m_data(data)
+AuthFlow::AuthFlow(AccountData* data, const AuthContext& context, Action action) : Task(), m_data(data)
 {
     // Resolve MSA through the auth registry (R3.4). Persistence still uses AccountType.
     // Offline accounts historically have no AuthFlow steps and complete successfully.
@@ -29,22 +27,23 @@ AuthFlow::AuthFlow(AccountData* data, Action action) : Task(), m_data(data)
             interactive ? Auth::AuthCapability::InteractiveLogin : Auth::AuthCapability::SilentRefresh;
 
         if (msaProvider != nullptr && msaProvider->hasCapability(neededCapability)) {
+            auto* network = context.network;
             if (action == Action::DeviceCode) {
-                auto oauthStep = makeShared<MSADeviceCodeStep>(m_data);
+                auto oauthStep = makeShared<MSADeviceCodeStep>(m_data, network, context.msaClientId());
                 connect(oauthStep.get(), &MSADeviceCodeStep::authorizeWithBrowser, this, &AuthFlow::authorizeWithBrowserWithExtra);
                 m_steps.append(oauthStep);
             } else {
-                auto oauthStep = makeShared<MSAStep>(m_data, action == Action::Refresh);
+                auto oauthStep = makeShared<MSAStep>(m_data, context, action == Action::Refresh);
                 connect(oauthStep.get(), &MSAStep::authorizeWithBrowser, this, &AuthFlow::authorizeWithBrowser);
                 m_steps.append(oauthStep);
             }
-            m_steps.append(makeShared<XboxUserStep>(m_data));
-            m_steps.append(
-                makeShared<XboxAuthorizationStep>(m_data, &m_data->mojangservicesToken, "rp://api.minecraftservices.com/", "Mojang"));
-            m_steps.append(makeShared<LauncherLoginStep>(m_data));
-            m_steps.append(makeShared<EntitlementsStep>(m_data));
-            m_steps.append(makeShared<MinecraftProfileStep>(m_data));
-            m_steps.append(makeShared<GetSkinStep>(m_data));
+            m_steps.append(makeShared<XboxUserStep>(m_data, network));
+            m_steps.append(makeShared<XboxAuthorizationStep>(m_data, network, &m_data->mojangservicesToken,
+                                                             "rp://api.minecraftservices.com/", "Mojang"));
+            m_steps.append(makeShared<LauncherLoginStep>(m_data, network));
+            m_steps.append(makeShared<EntitlementsStep>(m_data, network));
+            m_steps.append(makeShared<MinecraftProfileStep>(m_data, network));
+            m_steps.append(makeShared<GetSkinStep>(m_data, network));
         } else {
             // Do not treat a later drained step list as this failure mode.
             m_msaProviderUnavailable = true;

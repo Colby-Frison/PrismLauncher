@@ -92,7 +92,8 @@ void ensureBuiltInProvidersRegistered()
         provider.createNewInstancePage = [](NewInstanceDialog* dialog) -> BasePage* { return new FlamePage(dialog); };
         // Fresh API instances for registry consumers. Resource pages still use the
         // established FlameAPI::get() singleton for behavior parity (R3.2).
-        provider.createResourceAPI = [] { return std::unique_ptr<ResourceAPI>(std::make_unique<FlameAPI>()); };
+        // Network is injected at real call sites; registry factory is unused by dialogs today.
+        provider.createResourceAPI = [] { return std::unique_ptr<ResourceAPI>(std::make_unique<FlameAPI>(nullptr)); };
         provider.createModPage = [](ResourceDownload::ResourceDownloadDialog* dialog, BaseInstance& instance) -> BasePage* {
             if (!FlameAPI::validateModLoaders(supportedLoaders(instance))) {
                 return nullptr;
@@ -153,7 +154,7 @@ void ensureBuiltInProvidersRegistered()
                                 ProviderCapability::TexturePacks | ProviderCapability::ShaderPacks | ProviderCapability::DataPacks |
                                 ProviderCapability::HasResourceAPI;
         provider.createNewInstancePage = [](NewInstanceDialog* dialog) -> BasePage* { return new ModrinthPage(dialog); };
-        provider.createResourceAPI = [] { return std::unique_ptr<ResourceAPI>(std::make_unique<ModrinthAPI>()); };
+        provider.createResourceAPI = [] { return std::unique_ptr<ResourceAPI>(std::make_unique<ModrinthAPI>(nullptr)); };
         provider.createModPage = [](ResourceDownload::ResourceDownloadDialog* dialog, BaseInstance& instance) -> BasePage* {
             if (!ModrinthAPI::validateModLoaders(supportedLoaders(instance))) {
                 return nullptr;
