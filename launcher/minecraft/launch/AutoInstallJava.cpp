@@ -245,11 +245,6 @@ void AutoInstallJava::tryNextMajorJava()
     if (javaMajor->isLoaded()) {
         downloadJava(javaMajor, wantedJavaName);
     } else {
-        auto* metadata = m_instance->services().metadata;
-        if (metadata == nullptr) {
-            emitFailed(tr("No metadata index is available to download Java."));
-            return;
-        }
         m_current_task = metadata->loadVersion("net.minecraft.java", javaMajor->version(), Net::Mode::Online);
         connect(m_current_task.get(), &Task::succeeded, this,
                 [this, javaMajor, wantedJavaName] { downloadJava(javaMajor, wantedJavaName); });

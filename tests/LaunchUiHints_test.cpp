@@ -12,6 +12,7 @@
 #include <LaunchController.h>
 #include <LaunchCoordinator.h>
 #include <LaunchUiHints.h>
+#include <minecraft/InstanceServices.h>
 #include <minecraft/MinecraftInstance.h>
 #include <settings/INISettingsObject.h>
 
@@ -23,7 +24,7 @@ namespace {
 class FakeMinecraftInstance : public MinecraftInstance {
    public:
     FakeMinecraftInstance(SettingsObject* globalSettings, std::unique_ptr<SettingsObject> settings, const QString& rootDir)
-        : MinecraftInstance(globalSettings, std::move(settings), rootDir)
+        : MinecraftInstance(globalSettings, std::move(settings), rootDir, InstanceServices{})
     {
     }
 };
